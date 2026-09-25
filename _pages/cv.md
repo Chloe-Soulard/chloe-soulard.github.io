@@ -28,6 +28,7 @@ Research experience
 * **Research internship** (6 months), 2020, ECOBIO lab, Rennes
   * Inhibition of sewage sludge anaerobic digestion by propionic acid
   * Supervisor: Céline Roose-Amsaleg
+  * Continued the project for 6 more months alongside my studies, as a dedicated research course at UTC
   * This work contributed to a [publication](https://doi.org/10.1016/j.jece.2026.123824) in the *Journal of Environmental Chemical Engineering*
 
 Awards
