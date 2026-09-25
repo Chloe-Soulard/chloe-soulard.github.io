@@ -1,5 +1,5 @@
 ---
-title: "Transformation génétique et édition génétique du pois"
+title: "Genetic transformation and genome editing in pea"
 collection: talks
 type: "Talk"
 permalink: /talks/2026-06-regencrop-prtge-2026
