@@ -3,8 +3,9 @@ title: "Propionic acid-related inhibition during anaerobic digestion: Insights i
 collection: publications
 category: manuscripts
 permalink: /publication/2026-propionic-acid-anaerobic-digestion
-excerpt: 'How propionic acid, propionate ions and acidity each inhibit methane production in anaerobic digestion of sewage sludge, and how the microbial community responds.'
+excerpt: 'I designed the protocol for testing inhibition by propionic acid in lab-scale anaerobic digesters, and performed the metabarcoding experiment and the related bioinformatics analyses for this publication.'
 date: 2026-10-01
+order: 2
 venue: 'Journal of Environmental Chemical Engineering'
 paperurl: 'https://doi.org/10.1016/j.jece.2026.123824'
 citation: 'Liu, X., <b>Soulard, C.</b>, Jamilloux, V., Pauss, A., André, L., Ribeiro, T., Guérin-Rechdaoui, S., Rocher, V., Lacroix, C., Bureau, C., Midoux, C., Chapleur, O., Bize, A., &amp; Roose-Amsaleg, C. (2026). Propionic acid-related inhibition during anaerobic digestion: Insights into methane production and microbial community responses. <i>Journal of Environmental Chemical Engineering</i>, 14(5), 123824. https://doi.org/10.1016/j.jece.2026.123824'

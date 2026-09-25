@@ -23,7 +23,7 @@ repository               : "Chloe-Soulard/chloe-soulard.github.io"
 #               Additional customization can be done by editing /_includes/author-profile.html
 author:
   # Biographic information
-  avatar           : # e.g. "profile.png" placed in /images/
+  avatar           : "profile-chloe.jpg"
   name             : "Chloé Soulard"
   pronouns         : # example: "she/her"  
   bio              : "PhD student in plant biology"
@@ -222,16 +222,16 @@ kramdown:
 # These settings control the types of collections used by the template
 collections:
   teaching:
-    output: true
+    output: false
     permalink: /:collection/:path/
   publications:
-    output: true
+    output: false
     permalink: /:collection/:path/
   portfolio:
     output: true
     permalink: /:collection/:path/
   talks:
-    output: true
+    output: false
     permalink: /:collection/:path/
 
 
