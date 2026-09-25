@@ -24,4 +24,4 @@ I love molecular biology and bioinformatics, and enjoy combining bench work with
 
 Background
 ======
-I trained as an engineer at the Université de Technologie de Compiègne (UTC), including an exchange semester at TU Braunschweig in Germany. During my studies, I did a research internship at the ECOBIO lab in Rennes with Céline Roose-Amsaleg, on the inhibition of sewage sludge anaerobic digestion by propionic acid. I then joined IJPB for a second internship with Fabien Nogué and Pierre-François Perroud, on the cell-cycle regulation of Cas9 activity to improve homology-directed repair in the moss *Physcomitrium patens*.
+I trained as an engineer at the Université de Technologie de Compiègne (UTC), including an exchange semester at TU Braunschweig in Germany. During my studies, I did a research internship at the ECOBIO lab in Rennes with Céline Roose-Amsaleg, on the inhibition of sewage sludge anaerobic digestion by propionic acid. I then joined IJPB for a second internship with Fabien Nogué and Pierre-François Perroud, on the cell-cycle regulation of Cas9 activity to improve homology-directed repair in the moss *Physcomitrium patens*, before starting my PhD.
