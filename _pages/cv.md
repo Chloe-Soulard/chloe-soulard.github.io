@@ -21,7 +21,7 @@ Education
 
 Research experience
 ======
-* **Research internship**, Institut Jean-Pierre Bourgin (IJPB), INRAE, Versailles
+* **Research internship** (6 months), Institut Jean-Pierre Bourgin (IJPB), INRAE, Versailles
   * Cell-cycle regulation of Cas9 activity to improve homology-directed repair (HDR) in the moss *Physcomitrium patens*
   * Supervisors: Fabien Nogué and Pierre-François Perroud
 
