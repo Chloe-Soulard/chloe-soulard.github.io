@@ -15,6 +15,6 @@ Copy-paste your gene sequence, add annotations about where the exons are and the
 [Open the Alleloscope](/tools/alleloscope.html){: .btn target="_blank"} [Source code on GitHub](https://github.com/Chloe-Soulard/Drawing-genes-alleles-and-protein-consequences){: .btn .btn--inverse target="_blank"}
 
 ## Chromatoscope
-Compares several Sanger sequencing chromatograms (.ab1) side by side to check alleles at a glance. Files are read locally and never leave your computer.
+Compares several Sanger sequencing chromatograms (.ab1) side by side to check alleles at a glance. Files are read locally and never leave your computer. I created it to study heteroallelic and heterozygous mutations, because the two underlying sequences can sometimes be tough to decipher!
 
 [Open the Chromatoscope](/tools/chromatoscope.html){: .btn target="_blank"} [Source code on GitHub](https://github.com/Chloe-Soulard/Chromatoscope){: .btn .btn--inverse target="_blank"}
