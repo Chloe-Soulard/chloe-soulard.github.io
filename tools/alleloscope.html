@@ -160,7 +160,11 @@ trunc max1a-3 61
          <code>trunc &lt;nom&gt; &lt;aa&gt; [&lt;premier residu modifie&gt;]</code> :
          la partie modifiee est dessinee en orange sur la barre de la proteine ;
          le bouton <em>Ecrire protein et trunc</em> remplit ces nombres, ainsi que
-         la ligne <code>protein</code>, a partir de la traduction<br>
+         la ligne <code>protein</code>, a partir de la traduction.
+         Un allele dont les lesions dans les exons retirent ou ajoutent un multiple
+         de 3 nt est <em>en phase</em> : si sa ligne <code>trunc</code> annonce la
+         longueur attendue (proteine moins les aa supprimes), sa proteine est
+         dessinee pleine longueur avec la deletion a sa place<br>
          <code>scale shared</code> ou <code>scale independent</code> (ligne globale) :
          echelle commune calee sur le gene le plus long, ou bien chaque gene occupe
          toute la largeur</p>
@@ -446,6 +450,43 @@ function levelsFor(caps) {               // -> level index for each caption
   });
 }
 
+// What an allele does to the reading frame, read off the coordinates alone:
+// the exons are the CDS, so counting the exonic bases each lesion removes or
+// adds is enough -- no sequence and no alignment needed. Each part carries the
+// codons it touches (a..b, 1-based) and its net change in nucleotides.
+function frameOf(gene, allele) {
+  const exons = gene.exons.slice().sort((u, v) => u.s - v.s);
+  const cdsIdx = (pos) => {                // 0-based CDS index, or -1 in an intron
+    let k = 0;
+    for (const x of exons) {
+      if (pos >= x.s && pos <= x.e) return k + pos - x.s;
+      k += x.e - x.s + 1;
+    }
+    return -1;
+  };
+  const parts = [];
+  for (const l of allele.lesions) {
+    let net = 0, lo = Infinity, hi = -Infinity;
+    if (l.type === 'del' || l.type === 'sub') {
+      let n = 0;
+      for (let pos = l.s; pos <= l.e; pos++) {
+        const k = cdsIdx(pos);
+        if (k >= 0) { n++; lo = Math.min(lo, k); hi = Math.max(hi, k); }
+      }
+      if (!n) continue;
+      net = l.type === 'del' ? -n : (l.seq ? l.seq.length - n : 0);
+    } else if (l.type === 'ins' || l.type === 'snp') {
+      const k = cdsIdx(l.s);
+      if (k < 0) continue;
+      if (l.type === 'ins') net = l.e;     // for "ins", e holds the inserted length
+      lo = hi = k;
+    } else continue;
+    parts.push({ net, a: Math.floor(lo / 3) + 1, b: Math.floor(hi / 3) + 1 });
+  }
+  const net = parts.reduce((s, q) => s + q.net, 0);
+  return { parts, net, inframe: parts.length > 0 && net % 3 === 0 };
+}
+
 // draws one gene block from the baseline y and returns the baseline of its last
 // row, so the caller can stack the next gene underneath it
 function renderGene(gene, ntX, y, out) {
@@ -558,6 +599,56 @@ function renderGene(gene, ntX, y, out) {
     let drawn = 0;
     for (const t of truncs) {
       if (!(t.aa > 0)) continue;
+
+      // In frame: the lesions add or remove a multiple of 3 nt, and the declared
+      // length is the wild type plus or minus exactly that many residues, so no
+      // stop appeared on the way. The protein is the wild type with a stretch
+      // missing, added or changed -- drawn in place, not as a block running to
+      // the end. A shorter declared length means a stop was created at the
+      // junction: that is a truncation and falls through to the drawing below.
+      const al = alleles.find(x => x.name === t.name);
+      const fr = al ? frameOf(gene, al) : null;
+      if (fr && fr.inframe && t.aa === protein + fr.net / 3) {
+        // when no part shifts the frame on its own, each one is drawn where it
+        // is; compensating frameshifts change everything in between instead
+        const parts = fr.parts.every(q => q.net % 3 === 0) ? fr.parts
+          : [{ net: fr.net, a: fr.parts[0].a, b: fr.parts[fr.parts.length - 1].b, mixed: true }];
+        const isIns = (q) => q.net > 0 && !q.mixed;
+        const caps = parts.filter(q => q.net !== 0 || q.mixed).map(q => ({
+          x: isIns(q) ? aaX(q.a) : (aaX(q.a - 1) + aaX(q.b)) / 2,
+          up: isIns(q) ? 4 : 0,                         // clear of the triangle
+          txt: q.net === 0 ? 'en phase' : (q.net < 0 ? '−' : '+') + Math.abs(q.net / 3) + ' aa en phase'
+        }));
+        const lvl = levelsFor(caps);
+        if (caps.length) y += 10 + Math.max(0, ...caps.map(c => c.up)) + Math.max(0, ...lvl) * LBL_H;
+
+        out.push(txt(X0 - 12, y + 4, esc(t.name), { anchor: 'end', key: K(gene.name + '.trunc.' + t.name) }));
+        out.push(`<rect x="${X0}" y="${y - 7}" width="${TRACK_W}" height="14" rx="2" fill="none" stroke="var(--rule)" stroke-width="0.5"/>`);
+        for (const q of parts) {
+          const l = aaX(q.a - 1), r = Math.max(l + 2, aaX(q.b));
+          if (q.net < 0 && !q.mixed)
+            out.push(`<rect x="${f(l)}" y="${y - 7}" width="${f(r - l)}" height="14" rx="2" fill="var(--del-fill)" stroke="var(--del-line)" stroke-width="0.5"/>`);
+          else if (q.a <= q.b && (q.net === 0 || q.mixed))   // residues changed in place
+            out.push(`<rect x="${f(l)}" y="${y - 7}" width="${f(r - l)}" height="14" rx="2" fill="var(--mut-fill)" stroke="var(--mut-line)" stroke-width="0.5"/>`);
+          if (isIns(q)) {
+            const ix = aaX(q.a);
+            out.push(`<polygon points="${f(ix - 5)},${y - 12} ${f(ix + 5)},${y - 12} ${f(ix)},${y - 2}" fill="var(--ins)"/>`);
+          }
+        }
+        caps.forEach((c, i) => {
+          const key = K(gene.name + '.trunc.' + t.name + '.cap' + i);
+          const nd = nudgeOf(key);
+          const ly = y - 11 - c.up - lvl[i] * LBL_H;
+          if (lvl[i] > 0 || Math.abs(nd.dx) > 2 || Math.abs(nd.dy) > 2)
+            out.push(`<line x1="${f(c.x + nd.dx)}" y1="${f(ly + nd.dy + 3)}" x2="${f(c.x)}" y2="${y - 7}" stroke="var(--del-text)" stroke-width="0.5"/>`);
+          out.push(txt(c.x, ly, esc(c.txt), { fill: 'var(--del-text)', anchor: 'middle', key }));
+        });
+        out.push(txt(X1 + 7, y + 4, t.aa + ' aa', { key: K(gene.name + '.trunc.' + t.name + '.aa') }));
+        y += PROT_ROW_H;
+        drawn++;
+        continue;
+      }
+
       out.push(txt(X0 - 12, y + 4, esc(t.name), { anchor: 'end', key: K(gene.name + '.trunc.' + t.name) }));
       // residues 1..from-1 read like the wild type, from..end do not
       const xEnd = Math.max(X0 + 2, aaX(t.aa));
@@ -959,6 +1050,41 @@ function mutantOf(gene, d, allele) {
   while (same < m.prot.length && same < d.prot.length && m.prot[same] === d.prot[same]) same++;
   m.same = same;
 
+  // In frame and running to the normal stop: the protein is the wild type with
+  // one stretch removed, added or changed. The residues it shares with the
+  // wild type at both ends bracket that stretch, so no alignment is needed.
+  m.inframe = m.shift === 0 && m.stopCodon > 0 && m.prot.length === d.prot.length + m.delta / 3;
+  m.suf = 0;
+  if (m.inframe) {
+    const room = Math.min(m.prot.length, d.prot.length) - same;
+    while (m.suf < room && m.prot[m.prot.length - 1 - m.suf] === d.prot[d.prot.length - 1 - m.suf]) m.suf++;
+    m.wtFrom = same + 1;                               // wild-type residues removed or changed
+    m.wtTo   = d.prot.length - m.suf;
+    m.newRes = m.prot.slice(same, m.prot.length - m.suf);   // what stands in their place
+
+    // Several lesions, each in frame on its own: walk them in order, so the
+    // wild-type stretch between two of them is not counted as changed. The
+    // codons each one touches come from the coordinates, as in the figure.
+    const parts = [];
+    for (const q of frameOf(gene, allele).parts.slice().sort((u, v) => u.a - v.a)) {
+      const last = parts[parts.length - 1];
+      if (last && q.a <= last.b) { last.b = Math.max(last.b, q.b); last.net += q.net; }
+      else parts.push({ ...q });
+    }
+    if (parts.length > 1 && parts.every(q => q.net % 3 === 0)) {
+      m.parts = parts;
+      m.changed = [];                                  // one flag per mutant residue
+      let i = 0, j = 0;
+      for (const q of parts) {
+        for (; j < q.a - 1 && i < m.prot.length; i++, j++) m.changed[i] = m.prot[i] !== d.prot[j];
+        const k = q.b - q.a + 1 + q.net / 3;           // residues standing for codons a..b
+        for (let t = 0; t < k && i < m.prot.length; t++, i++) m.changed[i] = m.prot[i] !== d.prot[q.a - 1 + t];
+        j = q.b;
+      }
+      for (; i < m.prot.length; i++, j++) m.changed[i] = m.prot[i] !== d.prot[j];
+    }
+  }
+
   if (intronic) m.note.push(intronic + ' lesion(s) entierement dans un intron : sans effet sur le CDS episse.');
   if (!m.lesions) m.note.push('aucune lesion ne touche les exons.');
   if (boundary) m.warn.push('la lesion recouvre une borne d exon : l epissage reel peut differer de ce calcul.');
@@ -975,6 +1101,24 @@ function mutantSummary(d, m) {
             + (m.delta >= 0 ? '+' : '') + m.delta + ')');
   bits.push(m.shift ? 'decalage du cadre (+' + m.shift + ')' : 'cadre conserve');
   bits.push('proteine ' + m.prot.length + ' aa');
+  if (m.parts) {
+    const span = (q) => q.a === q.b ? 'codon ' + q.a : 'codons ' + q.a + '-' + q.b;
+    bits.push('en phase : ' + m.parts.map(q =>
+      q.net < 0 ? 'deletion de ' + (-q.net / 3) + ' aa (' + span(q) + ')'
+      : q.net > 0 ? 'insertion de ' + (q.net / 3) + ' aa (' + span(q) + ')'
+      : span(q) + ' modifie' + (q.a === q.b ? '' : 's')).join(', '));
+    return bits.join(' | ');
+  }
+  if (m.inframe) {
+    const n = m.wtTo - m.wtFrom + 1, k = m.newRes.length;
+    const res = n === 1 ? 'residu ' + m.wtFrom : 'residus ' + m.wtFrom + '-' + m.wtTo;
+    if (n <= 0 && !k) bits.push('aucun acide amine change');
+    else if (n <= 0) bits.push('insertion en phase de ' + k + ' aa apres le residu ' + (m.wtFrom - 1));
+    else if (!k) bits.push('deletion en phase de ' + n + ' aa (' + res + ')');
+    else bits.push('en phase : ' + res + ' remplace' + (n > 1 ? 's' : '') + ' par '
+                   + (k <= 6 ? m.newRes : k + ' aa'));
+    return bits.join(' | ');
+  }
   if (m.stopCodon && m.stopCodon <= d.prot.length) bits.push('stop au codon ' + m.stopCodon);
   else if (!m.stopCodon) bits.push('pas de codon stop');
   if (m.same < m.prot.length || m.prot.length !== d.prot.length)
@@ -1077,7 +1221,11 @@ function refreshSeq() {
            + ' les introns restants sont episses comme chez le sauvage.</p>');
     for (const a of gene.alleles) {
       const m = MUT[gene.name][a.name];
-      const roles = m.prot.split('').map((c, i) => c === 'X' ? 'unk' : (i < m.same ? 'aa' : 'mut'));
+      // in frame, the residues after the changed stretch are the wild type again
+      const back = m.prot.length - m.suf;
+      const roles = m.prot.split('').map((c, i) => c === 'X' ? 'unk'
+        : m.changed ? (m.changed[i] ? 'mut' : 'aa')
+        : (i < m.same || i >= back ? 'aa' : 'mut'));
       out.push('<div class="seqbox allele">'
         + '<h3>' + esc(a.name) + ' (' + m.prot.length + ' aa)'
         + '<button class="mini" data-allele="' + esc(a.name) + '" data-part="prot">Copier</button></h3>'
@@ -1178,8 +1326,10 @@ function writeTruncs() {
     for (const a of alleles) {
       const m = MUT[gname][a];
       if (!m.prot.length) continue;
+      // an in-frame allele keeps its length only: the figure places the
+      // deletion itself, from the coordinates of the lesions
       const from = m.same + 1;
-      add.push('trunc ' + a + ' ' + m.prot.length + (from <= m.prot.length ? ' ' + from : ''));
+      add.push('trunc ' + a + ' ' + m.prot.length + (!m.inframe && from <= m.prot.length ? ' ' + from : ''));
       written++;
     }
     body.splice(at, 0, ...add);

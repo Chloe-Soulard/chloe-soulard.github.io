@@ -3,7 +3,7 @@ title: "Propionic acid-related inhibition during anaerobic digestion: Insights i
 collection: publications
 category: manuscripts
 permalink: /publication/2026-propionic-acid-anaerobic-digestion
-excerpt: 'I designed the protocol for testing inhibition by propionic acid in lab-scale anaerobic digesters, performed the DNA extractions for sequencing, and carried out all the 16S rRNA data analysis for this publication.'
+excerpt: "I designed the protocol for testing inhibition by propionic acid in lab-scale anaerobic digesters, performed the DNA extractions for sequencing, and carried out qPCR (relative quantification) and 16S rRNA data analysis for this publication."
 date: 2026-10-01
 order: 2
 venue: 'Journal of Environmental Chemical Engineering'
