@@ -259,6 +259,9 @@ input[type=range]{width:88px;accent-color:var(--accent)}
       <label class="btn primary">Open .ab1 files
         <input type="file" id="file2" multiple accept=".ab1,.abi,.fsa" hidden>
       </label>
+      <p>No file at hand? Try a made-up example: a wild type and three edited lines,
+         two of them carrying two different alleles.</p>
+      <button class="btn" id="example">Load a made-up example</button>
     </div>
   </div>
 
@@ -1236,6 +1239,14 @@ async function loadFiles(fileList){
     }
   }
 
+  afterLoad(files.length > 0);
+
+  if (errors.length){
+    $('#hint').innerHTML = '<b style="color:var(--accent)">Not loaded: ' + esc(errors.join(' ; ')) + '</b>';
+  }
+}
+
+function afterLoad(fit){
   const tr = traces();
   if (!state.refId && tr.length)    state.refId    = tr[0].id;
   if (!state.activeId && tr.length) state.activeId = tr[0].id;
@@ -1244,12 +1255,80 @@ async function loadFiles(fileList){
   $('#empty').classList.toggle('hidden', tr.length > 0);
 
   measureCell();
-  if (files.length && tr.length) fitAll();
+  if (fit && tr.length) fitAll();
   runSearch(); refreshRails(); render();
+}
 
-  if (errors.length){
-    $('#hint').innerHTML = '<b style="color:var(--accent)">Not loaded: ' + esc(errors.join(' ; ')) + '</b>';
+/* ============================================================
+   10b. EXAMPLE — made-up traces, built in memory
+   ------------------------------------------------------------
+   A wild type and three lines edited at the same guide. Past the
+   Cas9 cut site, the two lines carrying two different alleles show
+   overlapping peaks, called N — the case this tool was made for.
+   The generator is seeded, so the example is the same every time.
+   ============================================================ */
+function synthTrace(name, alleles, start, len, rnd){
+  const n = Math.min(len, ...alleles.map(a => a.length - start));
+  const ns = 24 + n * 12;
+  const ch = {};
+  for (const b of BASES) ch[b] = new Int16Array(ns);
+  const ploc = new Int16Array(n);
+  const sig = 2.6;
+  let seq = '';
+  for (let i = 0; i < n; i++){
+    const c = Math.round(12 + i * 12 + 2 * Math.sin(i / 23));   // peak spacing drifts a little
+    ploc[i] = c;
+    const h = 650 + 550 * rnd();
+    const share = alleles.length > 1 ? 0.4 + 0.2 * rnd() : 1;   // the two alleles are never quite equal
+    const bases = alleles.map(a => a[start + i]);
+    bases.forEach((b, k) => {
+      const H = h * (k ? 1 - share : share), arr = ch[b];
+      for (let x = Math.max(0, c - 9); x <= Math.min(ns - 1, c + 9); x++)
+        arr[x] += Math.round(H * Math.exp(-((x - c) ** 2) / (2 * sig * sig)));
+    });
+    seq += bases.every(b => b === bases[0]) ? bases[0] : 'N';
   }
+  for (const b of BASES){ const arr = ch[b]; for (let x = 0; x < ns; x++) arr[x] += Math.round(18 * rnd()); }
+  return { fileName: name + ' (made-up)', name, ch, ploc, seq, ns };
+}
+
+function loadExample(){
+  let s = 20240917;
+  const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const flank = (n) => { let x = ''; for (let i = 0; i < n; i++) x += 'ACGT'[Math.floor(rnd() * 4)]; return x; };
+
+  const proto = 'GACCTTGCAGTACGAGTTCA', pam = 'TGG';   // a made-up 20 nt guide and its PAM
+  const left = flank(140);
+  const ref  = left + proto + pam + flank(160);
+  const cut  = left.length + 17;                          // Cas9 cuts 3 bp upstream of the PAM
+  const ins1 = ref.slice(0, cut) + 'A' + ref.slice(cut);
+  const del4 = ref.slice(0, cut - 2) + ref.slice(cut + 2);
+
+  // every read starts at its own base, like real runs: the offsets realign them
+  const lines = [
+    ['WT',          [ref],        8],
+    ['line1 +1/+1', [ins1],       3],
+    ['line2 WT/−4', [ref, del4], 12],
+    ['line3 +1/−4', [ins1, del4], 6]
+  ];
+  const base0 = lines[0][2];
+  for (const [name, alleles, start] of lines){
+    const t = buildTrack(synthTrace(name, alleles, start, 230, rnd));
+    t.offset = start - base0;
+    buildLaneDOM(t);
+  }
+  const wt = traces()[0];
+  state.refId = state.activeId = wt.id;
+  addTextRow(proto + pam, left.length - base0, wt.id, 'sgRNA');
+
+  $('#q').value = state.query = proto.slice(0, 15);
+  afterLoad(true);
+
+  // open on the cut site, where the peaks start to overlap
+  setZoom(13);
+  view.left = (cut - base0) - viewportBases() / 2;
+  clampView(); render();
+  $('#zval').textContent = view.pxpb.toFixed(1);
 }
 
 function fitAll(){
@@ -1271,6 +1350,7 @@ function measureCell(){
 
 $('#file').addEventListener('change',  e => { loadFiles(e.target.files); e.target.value = ''; });
 $('#file2').addEventListener('change', e => { loadFiles(e.target.files); e.target.value = ''; });
+$('#example').onclick = loadExample;
 
 $('#q').addEventListener('input', e => {
   state.query = e.target.value.toUpperCase().replace(/[^ACGTNRYSWKMBDHV]/g, '');
