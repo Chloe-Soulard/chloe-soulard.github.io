@@ -20,8 +20,23 @@ My current research focuses on pea (*Pisum sativum*). My main interests are:
 - **Genome editing**: developing and applying CRISPR-Cas9 tools in pea, a legume crop that has long been difficult to edit ([Soulard et al., 2025](https://doi.org/10.1111/pbi.70091)).
 - **Strigolactone biosynthesis**: understanding how pea produces strigolactones, plant hormones that shape plant architecture and act as signals in the soil.
 
-I love molecular biology and bioinformatics, and enjoy combining bench work with data analysis.
-
 Background
 ======
 I trained as an engineer at the Université de Technologie de Compiègne (UTC), including an exchange semester at TU Braunschweig in Germany. During my studies, I did a research internship at the ECOBIO lab in Rennes with Céline Roose-Amsaleg, on the inhibition of sewage sludge anaerobic digestion by propionic acid. I then joined IJPB for a second internship with Fabien Nogué and Pierre-François Perroud, on the cell-cycle regulation of Cas9 activity to improve homology-directed repair in the moss *Physcomitrium patens*, before starting my PhD.
+
+Skills
+======
+**Molecular biology**
+
+- GoldenBraid cloning
+- CRISPR-Cas9 genome editing
+- Pea genetic transformation (embryonic axes)
+- DNA extraction, PCR and Sanger sequencing
+
+**Bioinformatics**
+
+- Variant analysis
+- 16S rRNA sequencing analysis
+- Nanopore long-read sequencing analysis
+- CRISPR guide design and off-target prediction
+- Python (Biopython) and BLAST

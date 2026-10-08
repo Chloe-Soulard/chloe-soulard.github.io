@@ -195,7 +195,14 @@
 .sidebar .author__desktop {
   display: none;
   @media screen and (min-width: 1024px) {
-    display: block;
+    /* long institution names wrap under the text, not under the icon */
+    display: flex;
+    align-items: baseline;
+    white-space: normal;
+
+    i {
+      flex-shrink: 0;
+    }
   }
 }
 

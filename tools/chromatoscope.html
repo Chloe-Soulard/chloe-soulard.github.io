@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chromatoscope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --bg:#e9edef; --panel:#ffffff; --panel2:#f3f6f8; --lane:#ffffff;
+  --ink:#101a21; --muted:#5d6e7a; --line:#d3dce1; --line2:#bcc8cf;
+  --accent:#b02f86; --accent-ink:#ffffff;
+  --match:rgba(176,47,134,.14); --match-line:rgba(176,47,134,.55);
+  --grid:rgba(16,26,33,.06);
+  --A:#12a04a; --C:#1a5fd0; --G:#1b2830; --T:#d13a2c; --N:#8b98a1;
+  --shadow:0 1px 2px rgba(16,26,33,.08), 0 8px 24px -16px rgba(16,26,33,.35);
+  --rail:210px;
+}
+:root[data-theme="dark"]{
+  --bg:#0b1115; --panel:#131b21; --panel2:#0f171c; --lane:#0e161b;
+  --ink:#e3ecf1; --muted:#8b9ba7; --line:#243038; --line2:#374752;
+  --accent:#f06cc0; --accent-ink:#1a0a15;
+  --match:rgba(240,108,192,.16); --match-line:rgba(240,108,192,.6);
+  --grid:rgba(227,236,241,.07);
+  --A:#3ccf72; --C:#5aa3ff; --G:#d9e5ec; --T:#ff6d5f; --N:#77848d;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1115; --panel:#131b21; --panel2:#0f171c; --lane:#0e161b;
+    --ink:#e3ecf1; --muted:#8b9ba7; --line:#243038; --line2:#374752;
+    --accent:#f06cc0; --accent-ink:#1a0a15;
+    --match:rgba(240,108,192,.16); --match-line:rgba(240,108,192,.6);
+    --grid:rgba(227,236,241,.07);
+    --A:#3ccf72; --C:#5aa3ff; --G:#d9e5ec; --T:#ff6d5f; --N:#77848d;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,"Segoe UI",system-ui,sans-serif;
+  font-size:13px; -webkit-font-smoothing:antialiased; overflow:hidden;
+}
+button,input,select{font:inherit;color:inherit}
+
+/* ---------- shell ---------- */
+.app{height:100%;display:flex;flex-direction:column}
+
+/* ---------- toolbar ---------- */
+.tb{
+  flex:0 0 auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:8px 12px; background:var(--panel); border-bottom:1px solid var(--line);
+  box-shadow:var(--shadow); position:relative; z-index:5;
+}
+.brand{display:flex;flex-direction:column;line-height:1.15;margin-right:4px}
+.brand b{font-weight:600;font-size:13px;letter-spacing:-.01em}
+.brand span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em}
+.sep{width:1px;align-self:stretch;background:var(--line);margin:2px 2px}
+.grp{display:flex;align-items:center;gap:6px}
+.lbl{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:500}
+.spacer{flex:1 1 auto}
+
+.btn{
+  border:1px solid var(--line2); background:var(--panel2); color:var(--ink);
+  border-radius:5px; padding:5px 10px; cursor:pointer; font-size:12px;
+  display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+}
+.btn:hover{border-color:var(--muted)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:500}
+.btn.sq{padding:4px 8px;min-width:26px;justify-content:center;font-variant-numeric:tabular-nums}
+.btn[disabled]{opacity:.4;cursor:default}
+
+.qin{
+  border:1px solid var(--line2); background:var(--lane); border-radius:5px;
+  padding:5px 8px; width:230px; font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  font-size:12px; letter-spacing:.04em; text-transform:uppercase;
+}
+.qin:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--match)}
+.cnt{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-size:11px;color:var(--muted);
+  font-variant-numeric:tabular-nums;min-width:44px;text-align:center}
+input[type=range]{width:88px;accent-color:var(--accent)}
+
+/* ---------- work surface ---------- */
+.work{position:relative;flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
+.row{display:grid;grid-template-columns:var(--rail) 1fr;align-items:stretch}
+.rail{
+  border-right:1px solid var(--line); background:var(--panel);
+  padding:6px 10px; display:flex; flex-direction:column; gap:4px; min-width:0;
+}
+.cell{position:relative;min-width:0;overflow:hidden}
+
+.rulerrow{flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--panel)}
+.rulerrail{justify-content:center;font-size:10px;text-transform:uppercase;
+  letter-spacing:.09em;color:var(--muted);padding-top:8px}
+#ruler{display:block;width:100%;height:28px}
+
+.lanes{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;min-height:0;background:var(--bg)}
+.lane{border-bottom:1px solid var(--line);background:var(--panel)}
+.lane.active .rail{background:var(--panel2);box-shadow:inset 3px 0 0 var(--accent)}
+.lane canvas{display:block;width:100%;cursor:grab;touch-action:none}
+.lane canvas.dragging{cursor:grabbing}
+.lane.locked canvas{cursor:default}
+
+.tname{
+  font-weight:600;font-size:12px;line-height:1.2;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;
+}
+.tmeta{font-size:10px;color:var(--muted);font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  font-variant-numeric:tabular-nums;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tmeta .hit{color:var(--accent);font-weight:600}
+.trow{display:flex;gap:4px;align-items:center;margin-top:auto}
+.off{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-size:11px;
+  font-variant-numeric:tabular-nums;min-width:52px;text-align:center;color:var(--muted)}
+.off.moved{color:var(--accent);font-weight:600}
+.tag{
+  font-size:9px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;
+  border:1px solid var(--line2);border-radius:3px;padding:1px 4px;color:var(--muted);
+  cursor:pointer;background:none;
+}
+.tag.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+.lanes .rail{cursor:grab}
+.lanes .rail button{cursor:pointer}
+.lgrip{color:var(--line2);margin-right:5px;letter-spacing:-2px;font-size:11px;user-select:none}
+.lane.reordering{opacity:.7;position:relative;z-index:2;box-shadow:var(--shadow)}
+.lane.reordering .rail{cursor:grabbing}
+
+/* short tracks: the rail folds onto a single line, otherwise it is the rail
+   that sets the row height and the slider stops having any effect */
+.lanes.compact .rail{flex-direction:row;align-items:center;gap:6px;padding:1px 6px}
+.lanes.compact .tname{flex:1 1 auto;font-size:11px}
+.lanes.compact .tmeta{font-size:10px;flex:0 0 auto}
+.lanes.compact .tmeta .bases{display:none}
+.lanes.compact .trow{margin-top:0}
+.lanes.compact .btn.sq{padding:0 5px;min-width:20px}
+.lanes.compact .tag{padding:0 3px}
+.lanes.compact .off{min-width:34px;font-size:10px}
+
+.hscroll{overflow-x:auto;overflow-y:hidden;height:14px;background:var(--panel)}
+.hscroll div{height:1px}
+
+.cursorline{
+  position:absolute;top:0;bottom:0;width:1px;background:var(--accent);
+  opacity:.5;pointer-events:none;display:none;z-index:3;
+}
+
+/* ---------- text rows ---------- */
+/* A text row is just another row of the stack: it reuses .lane/.rail,
+   with a rail always folded onto one line since it is only 26 px tall. */
+.textrow .rail{
+  flex-direction:row;align-items:center;gap:6px;padding:1px 6px;background:var(--panel2);
+}
+.textrow .tname{flex:1 1 auto;font-size:11px;display:flex;align-items:center;min-width:0}
+.textrow .trow{margin-top:0}
+.textrow .btn.sq{padding:0 5px;min-width:20px}
+.textrow .tag{padding:0 3px}
+.textrow .off{min-width:34px;font-size:10px}
+.rowname{
+  flex:1 1 auto;min-width:0;border:1px solid transparent;background:none;
+  font-size:11px;font-weight:600;border-radius:3px;padding:1px 3px;
+}
+.rowname:hover{border-color:var(--line2)}
+.rowname:focus{outline:none;border-color:var(--accent);background:var(--lane)}
+.notecanvas{display:block;width:100%;height:26px;cursor:text;outline:none}
+.notecanvas:focus{box-shadow:inset 0 0 0 1px var(--accent)}
+
+/* ---------- footer ---------- */
+.status{
+  flex:0 0 auto;display:flex;align-items:center;gap:16px;padding:5px 12px;
+  background:var(--panel2);border-top:1px solid var(--line);font-size:11px;color:var(--muted);
+}
+.status b{font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;color:var(--ink);
+  font-weight:500;font-variant-numeric:tabular-nums}
+.status kbd{
+  font-family:"IBM Plex Mono",ui-monospace,Consolas,monospace;font-size:10px;
+  border:1px solid var(--line2);border-bottom-width:2px;border-radius:3px;padding:0 4px;
+  background:var(--panel);color:var(--ink);
+}
+#hint{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.credit{flex:0 0 auto;margin-left:auto;font-size:10px;opacity:.5;font-style:italic}
+
+/* ---------- empty state ---------- */
+.empty{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:14px;text-align:center;padding:40px;background:var(--bg);z-index:4;
+}
+.empty h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-.015em}
+.empty p{margin:0;color:var(--muted);max-width:52ch;line-height:1.6}
+.empty .keys{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+.dropping{outline:3px dashed var(--accent);outline-offset:-10px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="tb">
+    <div class="brand"><b>Chromatoscope</b><span>Sanger allele comparison</span></div>
+
+    <label class="btn primary">Open .ab1 files
+      <input type="file" id="file" multiple accept=".ab1,.abi,.fsa" hidden>
+    </label>
+
+    <div class="sep"></div>
+    <div class="grp">
+      <span class="lbl">Motif</span>
+      <input id="q" class="qin" placeholder="e.g. GGATCCGAATTC" spellcheck="false" autocomplete="off">
+      <button class="btn sq" id="prev" title="Previous match">‹</button>
+      <span class="cnt" id="qcount">—</span>
+      <button class="btn sq" id="next" title="Next match">›</button>
+    </div>
+
+    <div class="sep"></div>
+    <div class="grp">
+      <span class="lbl">Zoom</span>
+      <button class="btn sq" id="zo" title="Zoom out">−</button>
+      <span class="cnt" id="zval">12</span>
+      <button class="btn sq" id="zi" title="Zoom in">+</button>
+      <button class="btn" id="fit">Fit</button>
+    </div>
+    <div class="grp"><span class="lbl">Amplitude</span><input id="amp" type="range" min="0.3" max="3" step="0.05" value="1"></div>
+    <div class="grp"><span class="lbl">Height</span><input id="lh" type="range" min="28" max="220" step="2" value="118"></div>
+
+    <div class="sep"></div>
+    <button class="btn" id="addnote" title="Insert a text row below the active row">+ text row</button>
+
+    <div class="spacer"></div>
+    <button class="btn" id="resetoff">Reset offsets</button>
+    <button class="btn" id="png" title="Export the current view as PNG">PNG</button>
+    <button class="btn sq" id="theme" title="Toggle theme">◐</button>
+  </header>
+
+  <div class="work" id="work">
+    <div class="row rulerrow">
+      <div class="rail rulerrail" id="rulerrail">position</div>
+      <div class="cell"><canvas id="ruler"></canvas></div>
+    </div>
+
+    <div class="lanes" id="lanes"></div>
+
+    <div class="row">
+      <div class="rail" style="padding:0"></div>
+      <div class="cell"><div class="hscroll" id="hscroll"><div id="hspacer"></div></div></div>
+    </div>
+
+    <div class="cursorline" id="cursorline"></div>
+
+    <div class="empty" id="empty">
+      <h1>No chromatogram loaded</h1>
+      <p>Open several <b>.ab1</b> files at once — or drop them straight onto this window.
+         They are read locally by the browser and never leave your machine.</p>
+      <label class="btn primary">Open .ab1 files
+        <input type="file" id="file2" multiple accept=".ab1,.abi,.fsa" hidden>
+      </label>
+    </div>
+  </div>
+
+  <footer class="status">
+    <span>Cursor <b id="pos">—</b></span>
+    <span id="hint">
+      Drag a row to slide it · drag its rail to reorder · on a text row, click a cell then type ·
+      <kbd>wheel</kbd> scrolls · <kbd>Ctrl</kbd>+<kbd>wheel</kbd> zooms ·
+      <kbd>←</kbd><kbd>→</kbd> shift the active row · <kbd>Alt</kbd>+<kbd>↑</kbd><kbd>↓</kbd> move it ·
+      <kbd>double-click</kbd> resets
+    </span>
+    <span class="credit">developed by chloé soulard with Claude — feel free to share!</span>
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   1. ABIF (.ab1) PARSER
+   ============================================================ */
+const BASES = ['A','C','G','T'];
+
+function parseAB1(buffer, fileName){
+  const dv = new DataView(buffer);
+  const sig = str4(dv, 0);
+  if (sig !== 'ABIF') throw new Error("ABIF signature missing (file not recognised)");
+
+  const numEntries = dv.getInt32(18);
+  const dirOffset  = dv.getInt32(26);
+  const dir = new Map();
+
+  for (let i = 0; i < numEntries; i++){
+    const o = dirOffset + i*28;
+    if (o + 28 > dv.byteLength) break;
+    const name   = str4(dv, o);
+    const number = dv.getInt32(o+4);
+    const etype  = dv.getInt16(o+8);
+    const nelem  = dv.getInt32(o+12);
+    const dsize  = dv.getInt32(o+16);
+    // ABIF gotcha: when the data fits in 4 bytes it is stored INLINE
+    // in the dataoffset field itself.
+    const off    = dsize <= 4 ? o+20 : dv.getInt32(o+20);
+    dir.set(name + '/' + number, {etype, nelem, dsize, off});
+  }
+
+  const get = (n, k) => dir.get(n + '/' + k);
+
+  function readChars(e){
+    let s = '';
+    for (let i = 0; i < e.nelem; i++) s += String.fromCharCode(dv.getUint8(e.off + i));
+    return s;
+  }
+  function readPString(e){
+    const len = dv.getUint8(e.off);
+    let s = '';
+    for (let i = 0; i < len; i++) s += String.fromCharCode(dv.getUint8(e.off + 1 + i));
+    return s;
+  }
+  function readShorts(e){
+    const a = new Int16Array(e.nelem);
+    for (let i = 0; i < e.nelem; i++) a[i] = dv.getInt16(e.off + i*2);
+    return a;
+  }
+
+  const fwoE = get('FWO_', 1);
+  const fwo  = fwoE ? readChars(fwoE) : 'GATC';   // filter order, e.g. "GATC"
+
+  // Analysed traces DATA9..12, falling back to raw traces DATA1..4
+  let first = 9;
+  if (!get('DATA', 9)) first = 1;
+  const ch = {};
+  for (let i = 0; i < 4; i++){
+    const e = get('DATA', first + i);
+    if (!e) throw new Error("DATA" + (first+i) + " channel missing");
+    ch[fwo[i]] = readShorts(e);
+  }
+  for (const b of BASES) if (!ch[b]) throw new Error("unexpected filter order: " + fwo);
+
+  const plocE = get('PLOC', 2) || get('PLOC', 1);
+  const pbasE = get('PBAS', 2) || get('PBAS', 1);
+  if (!plocE) throw new Error("PLOC missing (peak positions)");
+  if (!pbasE) throw new Error("PBAS missing (called bases)");
+
+  const smplE = get('SMPL', 1);
+  let sample = '';
+  if (smplE) sample = (smplE.etype === 18 ? readPString(smplE) : readChars(smplE)).trim();
+
+  return {
+    fileName,
+    name: sample || fileName.replace(/\.ab1$/i, ''),
+    ch,
+    ploc: readShorts(plocE),
+    seq : readChars(pbasE).toUpperCase(),
+    ns  : ch.A.length
+  };
+}
+
+function str4(dv, o){
+  return String.fromCharCode(dv.getUint8(o), dv.getUint8(o+1), dv.getUint8(o+2), dv.getUint8(o+3));
+}
+
+/* ============================================================
+   2. TRACK MODEL — resampling onto the "base" axis
+   ------------------------------------------------------------
+   Two Sanger runs do not share the same mobility: peak spacing
+   differs between files and drifts along the run. Every sample is
+   therefore projected onto an axis where 1 base = 1 unit, using
+   PLOC. PLOC does not depend on base identity, so this still works
+   when PBAS is full of Ns.
+   ============================================================ */
+function buildTrack(p){
+  const n  = p.ploc.length;
+  const ns = p.ns;
+  const sampleBase = new Float32Array(ns);
+  const ploc = p.ploc;
+
+  const firstGap = n > 1 ? Math.max(1, ploc[1] - ploc[0])       : 12;
+  const lastGap  = n > 1 ? Math.max(1, ploc[n-1] - ploc[n-2])   : 12;
+
+  const start = Math.max(0, Math.min(ns, ploc[0]));
+  for (let s = 0; s < start; s++) sampleBase[s] = (s - ploc[0]) / firstGap;
+
+  for (let i = 0; i < n - 1; i++){
+    const a = ploc[i], b = ploc[i+1], gap = Math.max(1, b - a);
+    const hi = Math.min(b, ns);
+    for (let s = Math.max(0, a); s < hi; s++) sampleBase[s] = i + (s - a) / gap;
+  }
+
+  const tail = Math.max(0, Math.min(ns, ploc[n-1]));
+  for (let s = tail; s < ns; s++) sampleBase[s] = (n - 1) + (s - ploc[n-1]) / lastGap;
+
+  // reference amplitude: 95th percentile of the 4-channel envelope
+  const vals = [];
+  for (let s = 0; s < ns; s += 7){
+    let m = 0;
+    for (const b of BASES) { const v = p.ch[b][s]; if (v > m) m = v; }
+    vals.push(m);
+  }
+  vals.sort((a, b) => a - b);
+  const norm = Math.max(1, vals[Math.floor(vals.length * 0.95)] || 1);
+
+  return {
+    kind: 'trace',
+    id: 't' + (++buildTrack.n),
+    name: p.name, fileName: p.fileName,
+    ch: p.ch, ploc, seq: p.seq, n, ns, sampleBase, norm,
+    offset: 0, locked: false, matches: [],
+    el: null, canvas: null, ctx: null, cssW: 0, cssH: 0
+  };
+}
+buildTrack.n = 0;
+
+/** sample index for a given base coordinate (binary search) */
+function sampleAt(t, base){
+  const a = t.sampleBase;
+  let lo = 0, hi = t.ns - 1;
+  if (base <= a[0]) return 0;
+  if (base >= a[hi]) return hi;
+  while (lo < hi - 1){
+    const mid = (lo + hi) >> 1;
+    if (a[mid] < base) lo = mid; else hi = mid;
+  }
+  return lo;
+}
+
+/* ============================================================
+   3. STATE
+   ============================================================ */
+const state = {
+  // A single ordered stack. Every row carries kind: 'trace' or 'text',
+  // and both share the same geometry and the same reordering.
+  rows: [],
+  refId: null,
+  activeId: null,
+  caret: {id: null, col: 0},
+  query: '',
+  matchList: [],
+  matchIdx: -1,
+  amp: 1,
+  laneH: 118
+};
+const view = { pxpb: 12, left: -6 };
+
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+const COL = { base: {} };
+const MONO = '"IBM Plex Mono",ui-monospace,Consolas,monospace';
+let cellRect = null;
+
+const $ = s => document.querySelector(s);
+const lanesEl = $('#lanes'), rulerEl = $('#ruler');
+const hscroll = $('#hscroll'), hspacer = $('#hspacer'), cursorEl = $('#cursorline');
+
+/* typed views onto the stack — order always follows state.rows */
+const traces = () => state.rows.filter(r => r.kind === 'trace');
+const texts  = () => state.rows.filter(r => r.kind === 'text');
+const rowById = id => state.rows.find(r => r.id === id);
+
+/* ============================================================
+   4. GEOMETRY
+   ============================================================ */
+const baseToX = b => (b - view.left) * view.pxpb;
+const xToBase = x => view.left + x / view.pxpb;
+
+function extent(){
+  if (!state.rows.length) return {min: -10, max: 120};
+  let lo = Infinity, hi = -Infinity;
+  for (const r of state.rows){
+    const len = r.kind === 'trace' ? r.n : r.text.length;
+    lo = Math.min(lo, r.offset);
+    hi = Math.max(hi, r.offset + len);
+  }
+  if (lo === Infinity) return {min: -10, max: 120};
+  return {min: lo - 12, max: hi + 12};
+}
+
+function viewportBases(){
+  const w = cellRect ? cellRect.width : 800;
+  return w / view.pxpb;
+}
+
+function clampView(){
+  const e = extent(), span = viewportBases();
+  if (span >= e.max - e.min) view.left = e.min;
+  else view.left = Math.max(e.min, Math.min(e.max - span, view.left));
+}
+
+function setZoom(px, anchorX){
+  const w = cellRect ? cellRect.width : 800;
+  const ax = anchorX == null ? w / 2 : anchorX;
+  const anchorBase = xToBase(ax);
+  view.pxpb = Math.max(1.2, Math.min(60, px));
+  view.left = anchorBase - ax / view.pxpb;
+  clampView();
+  render();
+}
+
+/* ============================================================
+   5. RENDERING
+   ============================================================ */
+function refreshColors(){
+  const cs = getComputedStyle(document.documentElement);
+  const g = k => cs.getPropertyValue(k).trim();
+  COL.lane = g('--lane'); COL.grid = g('--grid'); COL.ink = g('--ink');
+  COL.muted = g('--muted'); COL.line = g('--line'); COL.line2 = g('--line2');
+  COL.accent = g('--accent'); COL.match = g('--match'); COL.matchLine = g('--match-line');
+  for (const b of BASES) COL.base[b] = g('--' + b);
+  COL.base.N = g('--N');
+}
+
+function fitCanvas(cv, h){
+  const w = cellRect ? cellRect.width : cv.clientWidth;
+  cv.width  = Math.max(1, Math.round(w * DPR));
+  cv.height = Math.max(1, Math.round(h * DPR));
+  cv.style.height = h + 'px';
+  return {w, h};
+}
+
+function render(){
+  if (!cellRect) measureCell();
+  lanesEl.classList.toggle('compact', state.laneH < 70);
+  drawRuler();
+  for (const r of state.rows) r.kind === 'trace' ? drawTrack(r) : drawTextRow(r);
+  refreshOffsets();
+  syncScrollbar();
+}
+
+/* ---- ruler: numbering follows the reference track ---- */
+function drawRuler(){
+  const {w, h} = fitCanvas(rulerEl, 28);
+  const ctx = rulerEl.getContext('2d');
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const ref = rowById(state.refId);
+  const shift = ref ? ref.offset : 0;
+
+  // adaptive step: at least 46 px between two labels
+  const steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000];
+  let step = steps.find(s => s * view.pxpb >= 46) || 1000;
+  const minor = step / (step % 10 === 0 ? 10 : 5);
+
+  const b0 = view.left, b1 = view.left + w / view.pxpb;
+
+  ctx.strokeStyle = COL.line2; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let b = Math.ceil((b0 - shift) / minor) * minor; b <= b1 - shift; b += minor){
+    const x = Math.round(baseToX(b + shift)) + 0.5;
+    ctx.moveTo(x, h - 6); ctx.lineTo(x, h - 1);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle = COL.muted;
+  ctx.font = '400 10px ' + MONO;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = COL.muted;
+  ctx.beginPath();
+  for (let b = Math.ceil((b0 - shift) / step) * step; b <= b1 - shift; b += step){
+    const x = Math.round(baseToX(b + shift)) + 0.5;
+    ctx.moveTo(x, h - 10); ctx.lineTo(x, h - 1);
+    ctx.fillText(String(b + 1), x, 9);   // biological numbering: 1-based
+  }
+  ctx.stroke();
+}
+
+/* ---- a single track ---- */
+function drawTrack(t){
+  if (!t.canvas) return;
+  const {w, h} = fitCanvas(t.canvas, state.laneH);
+  t.cssW = w; t.cssH = h;
+  const ctx = t.ctx;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = COL.lane; ctx.fillRect(0, 0, w, h);
+
+  // on short tracks the letter band and the top margin tighten up
+  // to leave as much room as possible for the signal.
+  const letterH = h < 54 ? 12 : 17;
+  const padTop  = h < 54 ? 2 : 7;
+  const baseY   = h - letterH;
+  const plotH   = Math.max(8, baseY - padTop);
+
+  // visible bounds, in the track's own coordinates
+  const b0 = view.left - t.offset;
+  const b1 = view.left + w / view.pxpb - t.offset;
+
+  drawGrid(ctx, t, w, baseY, b0, b1);
+  drawMatches(ctx, t, h, baseY);
+
+  // ---- the 4 channels ----
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 0, w, baseY); ctx.clip();
+
+  const s0 = sampleAt(t, b0 - 1), s1 = sampleAt(t, b1 + 1);
+  const span = Math.max(1, s1 - s0);
+  const step = Math.max(1, Math.floor(span / (w * 2)));   // decimation
+  const scale = (plotH / t.norm) * state.amp;
+
+  ctx.lineWidth = 1.3; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const b of BASES){
+    const arr = t.ch[b];
+    ctx.strokeStyle = COL.base[b];
+    ctx.beginPath();
+    let started = false;
+    for (let s = s0; s <= s1; s += step){
+      const x = (t.sampleBase[s] + t.offset - view.left) * view.pxpb;
+      const y = baseY - arr[s] * scale;
+      if (started) ctx.lineTo(x, y);
+      else { ctx.moveTo(x, y); started = true; }
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // ---- baseline ----
+  ctx.strokeStyle = COL.line; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, baseY + 0.5); ctx.lineTo(w, baseY + 0.5); ctx.stroke();
+
+  // ---- called bases (PBAS as-is, Ns included) ----
+  const i0 = Math.max(0, Math.floor(b0) - 1);
+  const i1 = Math.min(t.n - 1, Math.ceil(b1) + 1);
+
+  if (view.pxpb >= 6){
+    ctx.font = '500 ' + Math.min(letterH - 2, Math.max(7, view.pxpb * 0.95)) + 'px ' + MONO;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let i = i0; i <= i1; i++){
+      const c = t.seq[i] || 'N';
+      ctx.fillStyle = COL.base[c] || COL.base.N;
+      ctx.fillText(c, baseToX(i + t.offset), baseY + letterH / 2 + 1);
+    }
+  } else {
+    const tickH = Math.max(3, letterH - 6);
+    for (let i = i0; i <= i1; i++){
+      const c = t.seq[i] || 'N';
+      ctx.fillStyle = COL.base[c] || COL.base.N;
+      ctx.fillRect(baseToX(i + t.offset) - Math.max(0.5, view.pxpb * 0.35),
+                   baseY + 3, Math.max(1, view.pxpb * 0.7), tickH);
+    }
+  }
+}
+
+function drawGrid(ctx, t, w, baseY, b0, b1){
+  const stepPx = view.pxpb * 10;
+  if (stepPx < 22) return;
+  ctx.strokeStyle = COL.grid; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let b = Math.ceil(b0 / 10) * 10; b <= b1; b += 10){
+    const x = Math.round(baseToX(b + t.offset)) + 0.5;
+    ctx.moveTo(x, 0); ctx.lineTo(x, baseY);
+  }
+  ctx.stroke();
+}
+
+function drawMatches(ctx, t, h, baseY){
+  if (!t.matches.length) return;
+  const len = state.query.length;
+  const cur = state.matchList[state.matchIdx];
+  for (const m of t.matches){
+    const x = baseToX(m + t.offset) - view.pxpb / 2;
+    const wdt = len * view.pxpb;
+    if (x + wdt < -20 || x > t.cssW + 20) continue;
+    const isCur = cur && cur.trackId === t.id && cur.pos === m;
+    ctx.fillStyle = COL.match;
+    ctx.fillRect(x, 0, wdt, h);
+    ctx.strokeStyle = COL.matchLine;
+    ctx.lineWidth = isCur ? 2 : 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, h);
+    ctx.moveTo(x + wdt - 0.5, 0); ctx.lineTo(x + wdt - 0.5, h);
+    ctx.stroke();
+    if (isCur){
+      ctx.fillStyle = COL.matchLine;
+      ctx.fillRect(x, 0, wdt, 2);
+      ctx.fillRect(x, baseY - 2, wdt, 2);
+    }
+  }
+}
+
+/* ============================================================
+   6. TRACKS — DOM
+   ============================================================ */
+function buildLaneDOM(t){
+  const lane = document.createElement('div');
+  lane.className = 'lane row';
+  lane.dataset.id = t.id;
+  lane.innerHTML = `
+    <div class="rail">
+      <div class="tname" title="${esc(t.fileName)}"><span class="lgrip">⠿</span>${esc(t.name)}</div>
+      <div class="tmeta">
+        <span class="bases">${t.n} bases</span>
+        <span class="hitbox"></span>
+      </div>
+      <div class="trow">
+        <button class="btn sq oleft" title="Shift one base left">◂</button>
+        <span class="off">0</span>
+        <button class="btn sq oright" title="Shift one base right">▸</button>
+        <button class="tag reftag" title="Reference track for the ruler">ref</button>
+        <button class="tag locktag" title="Lock position">🔒</button>
+        <button class="tag deltag" title="Remove track">✕</button>
+      </div>
+    </div>
+    <div class="cell"><canvas></canvas></div>`;
+
+  t.el = lane;
+  t.canvas = lane.querySelector('canvas');
+  t.ctx = t.canvas.getContext('2d');
+
+  lane.querySelector('.oleft').onclick  = () => nudge(t, -1);
+  lane.querySelector('.oright').onclick = () => nudge(t,  1);
+  lane.querySelector('.reftag').onclick = () => { state.refId = t.id; refreshRails(); drawRuler(); };
+  lane.querySelector('.locktag').onclick = () => { t.locked = !t.locked; refreshRails(); };
+  lane.querySelector('.deltag').onclick  = () => removeRow(t);
+  attachTrackDrag(t);
+  attachRowReorder(t);
+  addRowToStack(t);
+}
+
+/** insert a row into the stack, right after the active row when possible */
+function addRowToStack(row, afterId){
+  const anchor = afterId ? rowById(afterId) : null;
+  if (anchor && anchor.el && anchor.el.parentNode === lanesEl){
+    lanesEl.insertBefore(row.el, anchor.el.nextSibling);
+    state.rows.splice(state.rows.indexOf(anchor) + 1, 0, row);
+  } else {
+    lanesEl.appendChild(row.el);
+    state.rows.push(row);
+  }
+}
+
+/* ---- reordering: drag the rail vertically ----
+   The rail is the handle, the canvas stays dedicated to horizontal
+   sliding — so the two gestures never collide.
+   Works identically for a trace and for a text row. */
+function attachRowReorder(row){
+  const rail = row.el.querySelector('.rail');
+  let drag = null;
+
+  rail.addEventListener('pointerdown', e => {
+    if (e.target.closest('button, input')) return;   // buttons and fields keep their own role
+    setActive(row.id);
+    drag = {y: e.clientY, started: false};
+    try { rail.setPointerCapture(e.pointerId); } catch (_){}
+  });
+
+  rail.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!drag.started){
+      if (Math.abs(e.clientY - drag.y) < 5) return;   // threshold: a click stays a click
+      drag.started = true;
+      row.el.classList.add('reordering');
+    }
+    const lanes = Array.from(lanesEl.children);
+    const i = lanes.indexOf(row.el);
+    const prev = lanes[i - 1], next = lanes[i + 1];
+    if (prev){
+      const r = prev.getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2){ lanesEl.insertBefore(row.el, prev); syncOrder(); return; }
+    }
+    if (next){
+      const r = next.getBoundingClientRect();
+      if (e.clientY > r.top + r.height / 2){ lanesEl.insertBefore(next, row.el); syncOrder(); return; }
+    }
+  });
+
+  const end = e => {
+    if (!drag) return;
+    row.el.classList.remove('reordering');
+    drag = null;
+    try { rail.releasePointerCapture(e.pointerId); } catch (_){}
+    render();
+  };
+  rail.addEventListener('pointerup', end);
+  rail.addEventListener('pointercancel', end);
+}
+
+/** realign state.rows with the actual DOM order */
+function syncOrder(){
+  const order = Array.from(lanesEl.children).map(el => el.dataset.id);
+  state.rows.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+}
+
+/** move a row one step (keyboard) */
+function moveRow(row, d){
+  const i = state.rows.indexOf(row), j = i + d;
+  if (i < 0 || j < 0 || j >= state.rows.length) return;
+  state.rows.splice(i, 1);
+  state.rows.splice(j, 0, row);
+  for (const r of state.rows) lanesEl.appendChild(r.el);   // restack in order
+  row.el.scrollIntoView({block: 'nearest'});
+  render();
+}
+
+/** the offset readout, shared by both row types */
+function refreshOffsets(){
+  for (const r of state.rows){
+    if (!r.el) continue;
+    const off = r.el.querySelector('.off');
+    const shown = Math.round(r.offset * 100) / 100;
+    off.textContent = (shown > 0 ? '+' : '') + shown;
+    off.classList.toggle('moved', Math.abs(r.offset) > 1e-6);
+    r.el.classList.toggle('active', state.activeId === r.id);
+  }
+}
+
+function refreshRails(){
+  refreshOffsets();
+  for (const t of traces()){
+    if (!t.el) continue;
+    t.el.querySelector('.reftag').classList.toggle('on', state.refId === t.id);
+    t.el.querySelector('.locktag').classList.toggle('on', t.locked);
+    t.el.classList.toggle('locked', t.locked);
+
+    const hb = t.el.querySelector('.hitbox');
+    if (state.query && t.matches.length) hb.innerHTML = `<span class="hit">${t.matches.length} match${t.matches.length > 1 ? 'es' : ''}</span>`;
+    else if (state.query) hb.innerHTML = `<span>no match</span>`;
+    else hb.textContent = '';
+  }
+}
+
+function setActive(id){ state.activeId = id; refreshRails(); }
+
+function nudge(row, d){
+  if (row.locked) return;
+  row.offset += d;
+  setActive(row.id);
+  refreshRails(); render();
+}
+
+function removeRow(row){
+  state.rows = state.rows.filter(x => x !== row);
+  row.el.remove();
+  if (state.refId === row.id){
+    const first = traces()[0];
+    state.refId = first ? first.id : null;
+  }
+  if (state.activeId === row.id) state.activeId = null;
+  if (state.caret.id === row.id) state.caret = {id: null, col: 0};
+  runSearch();
+  refreshRails();
+  $('#empty').classList.toggle('hidden', traces().length > 0);
+  render();
+}
+
+/* ---- drag a track to slide it ---- */
+function attachTrackDrag(t){
+  const cv = t.canvas;
+  let drag = null;
+
+  cv.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    setActive(t.id);
+    if (t.locked) return;
+    drag = {x: e.clientX, off0: t.offset, moved: false};
+    cv.setPointerCapture(e.pointerId);
+    cv.classList.add('dragging');
+  });
+
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const d = (e.clientX - drag.x) / view.pxpb;
+    // snap to whole bases; Alt = sub-base adjustment
+    t.offset = e.altKey ? drag.off0 + d : Math.round(drag.off0 + d);
+    if (Math.abs(e.clientX - drag.x) > 2) drag.moved = true;
+    refreshRails(); render();
+  });
+
+  const end = e => {
+    if (!drag) return;
+    drag = null;
+    cv.classList.remove('dragging');
+    try { cv.releasePointerCapture(e.pointerId); } catch (_){}
+  };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+
+  cv.addEventListener('dblclick', () => {
+    if (t.locked) return;
+    t.offset = 0; refreshRails(); render();
+  });
+}
+
+/* ============================================================
+   7. SEARCH — N never matches
+   ============================================================ */
+function runSearch(){
+  const q = state.query;
+  state.matchList = []; state.matchIdx = -1;
+
+  for (const t of traces()){
+    t.matches = [];
+    if (q.length < 2) continue;
+    const s = t.seq;
+    for (let i = 0; i + q.length <= s.length; i++){
+      let ok = true;
+      for (let j = 0; j < q.length; j++){
+        const a = s.charCodeAt(i + j), b = q.charCodeAt(j);
+        // strict rule: an N — in the target or in the query — voids the match
+        if (a !== b || a === 78 /* N */){ ok = false; break; }
+      }
+      if (ok){ t.matches.push(i); state.matchList.push({trackId: t.id, pos: i}); }
+    }
+  }
+
+  const total = state.matchList.length;
+  const withHits = traces().filter(t => t.matches.length).length;
+  $('#qcount').textContent = !q ? '—'
+    : total ? `${total} in ${withHits} track${withHits > 1 ? 's' : ''}`
+            : 'none';
+  $('#prev').disabled = $('#next').disabled = total === 0;
+  refreshRails();
+}
+
+function gotoMatch(d){
+  if (!state.matchList.length) return;
+  state.matchIdx = (state.matchIdx + d + state.matchList.length) % state.matchList.length;
+  const m = state.matchList[state.matchIdx];
+  const t = rowById(m.trackId);
+  if (!t) return;
+  view.left = m.pos + t.offset + state.query.length / 2 - viewportBases() / 2;
+  clampView();
+  setActive(t.id);
+  if (t.el) t.el.scrollIntoView({block: 'nearest'});
+  render();
+}
+
+/* ============================================================
+   8. TEXT ROWS — a grid of cells, one per base
+   ------------------------------------------------------------
+   A text row is a canvas drawn in the same geometry as a trace:
+   one cell = one base, aligned by construction. It lives in the
+   same stack as the traces, so it can sit anywhere between them.
+   Click the cell you want to write in, then type.
+   Typing OVERWRITES the current cell and moves on one base: it
+   does not insert, because inserting would shift everything after
+   it and break the alignment — the very thing we want to avoid.
+   ============================================================ */
+const NOTE_H = 26;
+
+/** Write a character at local column `col` and return the effective
+ *  column. Writing left of the start extends the row leftwards without
+ *  visually moving what is already there. */
+function noteSet(note, col, chr){
+  if (col < 0){
+    const pad = -col;
+    note.text = ' '.repeat(pad) + note.text;
+    note.offset -= pad;
+    col = 0;
+  }
+  if (col >= note.text.length) note.text = note.text.padEnd(col + 1, ' ');
+  note.text = note.text.slice(0, col) + chr + note.text.slice(col + 1);
+  return col;
+}
+
+function addTextRow(text, offset, afterId, label){
+  const note = {
+    kind: 'text',
+    id: 'x' + (++addTextRow.n),
+    name: label || 'annotation',
+    text: text || '', offset: offset || 0, locked: false,
+    el: null, canvas: null, ctx: null
+  };
+
+  const row = document.createElement('div');
+  row.className = 'lane row textrow';
+  row.dataset.id = note.id;
+  row.innerHTML = `
+    <div class="rail">
+      <div class="tname"><span class="lgrip">⠿</span><input class="rowname" value="${esc(note.name)}" spellcheck="false"></div>
+      <div class="trow">
+        <button class="btn sq oleft" title="Shift one base left">◂</button>
+        <span class="off">0</span>
+        <button class="btn sq oright" title="Shift one base right">▸</button>
+        <button class="tag deltag" title="Delete row">✕</button>
+      </div>
+    </div>
+    <div class="cell"><canvas class="notecanvas" tabindex="0"></canvas></div>`;
+
+  note.el = row;
+  note.canvas = row.querySelector('.notecanvas');
+  note.ctx = note.canvas.getContext('2d');
+
+  // Same gesture as on a trace: dragging slides the row, while a click
+  // without movement drops the cursor on the targeted cell.
+  let cdrag = null;
+  note.canvas.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    setActive(note.id);
+    const r = note.canvas.getBoundingClientRect();
+    cdrag = {
+      x: e.clientX, off0: note.offset, moved: false,
+      col: Math.round(xToBase(e.clientX - r.left) - note.offset)
+    };
+    try { note.canvas.setPointerCapture(e.pointerId); } catch (_){}
+  });
+
+  note.canvas.addEventListener('pointermove', e => {
+    if (!cdrag) return;
+    if (!cdrag.moved && Math.abs(e.clientX - cdrag.x) < 4) return;
+    cdrag.moved = true;
+    const d = (e.clientX - cdrag.x) / view.pxpb;
+    note.offset = e.altKey ? cdrag.off0 + d : Math.round(cdrag.off0 + d);
+    render();
+  });
+
+  const cend = e => {
+    if (!cdrag) return;
+    if (!cdrag.moved){
+      state.caret = {id: note.id, col: cdrag.col};
+      note.canvas.focus();
+      drawTextRows();
+    }
+    cdrag = null;
+    try { note.canvas.releasePointerCapture(e.pointerId); } catch (_){}
+    syncScrollbar();
+  };
+  note.canvas.addEventListener('pointerup', cend);
+  note.canvas.addEventListener('pointercancel', cend);
+
+  note.canvas.addEventListener('dblclick', () => { note.offset = 0; render(); });
+  note.canvas.addEventListener('focus', drawTextRows);
+  note.canvas.addEventListener('blur',  drawTextRows);
+  note.canvas.addEventListener('keydown', e => onNoteKey(note, e));
+
+  note.canvas.addEventListener('paste', e => {
+    e.preventDefault();
+    const txt = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, '');
+    if (!txt) return;
+    if (state.caret.id !== note.id) state.caret = {id: note.id, col: 0};
+    let col = state.caret.col;
+    for (const c of txt){ col = noteSet(note, col, c); col++; }
+    state.caret.col = col;
+    ensureCaretVisible(note);
+    render();
+  });
+
+  row.querySelector('.rowname').addEventListener('input', e => { note.name = e.target.value; });
+  row.querySelector('.oleft').onclick  = () => nudge(note, -1);
+  row.querySelector('.oright').onclick = () => nudge(note,  1);
+  row.querySelector('.deltag').onclick = () => removeRow(note);
+
+  attachRowReorder(note);
+  addRowToStack(note, afterId);
+  render();
+  return note;
+}
+addTextRow.n = 0;
+
+function onNoteKey(note, e){
+  if (e.ctrlKey || e.metaKey || e.altKey) return;   // let Ctrl+V, Ctrl+R… through
+  if (state.caret.id !== note.id) state.caret = {id: note.id, col: 0};
+  let col = state.caret.col;
+  const k = e.key;
+
+  if (k === 'ArrowLeft')       col--;
+  else if (k === 'ArrowRight') col++;
+  else if (k === 'ArrowUp' || k === 'ArrowDown'){
+    // jump to the next text row in the stack, stepping over traces
+    const list = texts();
+    const other = list[list.indexOf(note) + (k === 'ArrowUp' ? -1 : 1)];
+    if (!other) return;
+    e.preventDefault(); e.stopPropagation();
+    // keep the same base on screen when changing row
+    state.caret = {id: other.id, col: Math.round(col + note.offset - other.offset)};
+    setActive(other.id);
+    other.canvas.focus();
+    drawTextRows();
+    return;
+  }
+  else if (k === 'Backspace')  col = noteSet(note, col - 1, ' ');
+  else if (k === 'Delete')     noteSet(note, col, ' ');
+  else if (k === 'Home')       col = 0;
+  else if (k === 'End')        col = note.text.replace(/\s+$/, '').length;
+  else if (k.length === 1){ col = noteSet(note, col, k); col++; }
+  else return;                                      // Tab, F5, Esc... pass through
+
+  e.preventDefault(); e.stopPropagation();
+  state.caret = {id: note.id, col};
+  ensureCaretVisible(note);
+  render();
+}
+
+function ensureCaretVisible(note){
+  const b = state.caret.col + note.offset;
+  const span = viewportBases();
+  if (b < view.left + 2)             view.left = b - 2;
+  else if (b > view.left + span - 3) view.left = b - span + 3;
+  clampView();
+}
+
+function drawTextRows(){
+  for (const note of texts()) if (note.canvas) drawTextRow(note);
+}
+
+function drawTextRow(note){
+  const {w, h} = fitCanvas(note.canvas, NOTE_H);
+  const ctx = note.ctx;
+  const cw = view.pxpb;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = COL.lane;
+  ctx.fillRect(0, 0, w, h);
+
+  const b0 = Math.floor(view.left - note.offset) - 1;
+  const b1 = Math.ceil(view.left + w / view.pxpb - note.offset) + 1;
+
+  // ---- the cell grid ----
+  if (cw >= 3.5){
+    ctx.strokeStyle = COL.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = b0; i <= b1; i++){
+      const x = Math.round(baseToX(i + note.offset) - cw / 2) + 0.5;
+      ctx.moveTo(x, 2); ctx.lineTo(x, h - 2);
+    }
+    ctx.stroke();
+  }
+
+  // ---- the cursor cell ----
+  if (state.caret.id === note.id){
+    const focused = document.activeElement === note.canvas;
+    const x = baseToX(state.caret.col + note.offset) - cw / 2;
+    const bw = Math.max(2, cw);
+    ctx.fillStyle = COL.match;
+    ctx.fillRect(x, 1, bw, h - 2);
+    ctx.strokeStyle = COL.accent;
+    ctx.lineWidth = focused ? 2 : 1;
+    ctx.globalAlpha = focused ? 1 : 0.45;
+    ctx.strokeRect(x + 1, 2, bw - 2, h - 4);
+    ctx.globalAlpha = 1;
+  }
+
+  // ---- the letters, coloured per base ----
+  ctx.font = '500 ' + Math.min(15, Math.max(8, cw * 0.95)) + 'px ' + MONO;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const from = Math.max(0, b0), to = Math.min(note.text.length - 1, b1);
+  for (let i = from; i <= to; i++){
+    const c = note.text[i];
+    if (!c || c === ' ') continue;
+    const u = c.toUpperCase();
+    ctx.fillStyle = COL.base[u] || COL.muted;
+    ctx.fillText(c, baseToX(i + note.offset), h / 2 + 1);
+  }
+}
+
+function esc(s){
+  return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+/* ============================================================
+   9. NAVIGATION — wheel, scrollbar, cursor
+   ============================================================ */
+let syncing = false;
+
+function syncScrollbar(){
+  const e = extent();
+  hspacer.style.width = Math.max(1, (e.max - e.min) * view.pxpb) + 'px';
+  syncing = true;
+  hscroll.scrollLeft = (view.left - e.min) * view.pxpb;
+  requestAnimationFrame(() => { syncing = false; });
+}
+
+hscroll.addEventListener('scroll', () => {
+  if (syncing) return;
+  view.left = extent().min + hscroll.scrollLeft / view.pxpb;
+  drawRuler();
+  for (const r of state.rows) r.kind === 'trace' ? drawTrack(r) : drawTextRow(r);
+});
+
+function onWheel(e){
+  if (e.ctrlKey || e.metaKey){
+    e.preventDefault();
+    const x = e.clientX - (cellRect ? cellRect.left : 0);
+    setZoom(view.pxpb * (e.deltaY < 0 ? 1.16 : 1 / 1.16), x);
+    return;
+  }
+  // The vertical wheel only scrolls the track list when it actually
+  // overflows; otherwise it pans along the base axis.
+  const canScrollY = lanesEl.scrollHeight > lanesEl.clientHeight + 1;
+  const horizontal = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY) || !canScrollY;
+  if (!horizontal) return;
+  e.preventDefault();
+  view.left += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) / view.pxpb;
+  clampView(); render();
+}
+$('#work').addEventListener('wheel', onWheel, {passive: false});
+
+$('#work').addEventListener('mousemove', e => {
+  if (!cellRect || !state.rows.length) return;
+  const x = e.clientX - cellRect.left;
+  if (x < 0 || x > cellRect.width){ cursorEl.style.display = 'none'; $('#pos').textContent = '—'; return; }
+  const workRect = $('#work').getBoundingClientRect();
+  cursorEl.style.display = 'block';
+  cursorEl.style.left = (e.clientX - workRect.left) + 'px';
+
+  const ref = rowById(state.refId);
+  const b = xToBase(x) - (ref ? ref.offset : 0);
+  $('#pos').textContent = (ref ? ref.name + ' · ' : '') + 'base ' + Math.round(b + 1);
+});
+$('#work').addEventListener('mouseleave', () => {
+  cursorEl.style.display = 'none';
+  $('#pos').textContent = '—';
+});
+
+document.addEventListener('keydown', e => {
+  if (/^(INPUT|TEXTAREA)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+  if (e.target.classList && e.target.classList.contains('notecanvas')) return;
+  const t = rowById(state.activeId);
+  if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && t && e.altKey){
+    e.preventDefault(); moveRow(t, e.key === 'ArrowUp' ? -1 : 1);
+  }
+  else if (e.key === 'ArrowLeft'  && t && !e.shiftKey){ e.preventDefault(); nudge(t, -1); }
+  else if (e.key === 'ArrowRight' && t && !e.shiftKey){ e.preventDefault(); nudge(t, 1); }
+  else if (e.key === 'ArrowLeft'  || e.key === 'ArrowRight'){
+    e.preventDefault();
+    view.left += (e.key === 'ArrowLeft' ? -1 : 1) * viewportBases() * 0.25;
+    clampView(); render();
+  }
+  else if (e.key === 'n' && state.matchList.length) gotoMatch(e.shiftKey ? -1 : 1);
+});
+
+/* ============================================================
+   10. FILE LOADING
+   ============================================================ */
+async function loadFiles(fileList){
+  const files = Array.from(fileList).filter(f => /\.(ab1|abi|fsa)$/i.test(f.name));
+  const errors = [];
+
+  for (const f of files){
+    try {
+      const buf = await f.arrayBuffer();
+      buildLaneDOM(buildTrack(parseAB1(buf, f.name)));
+    } catch (err){
+      errors.push(f.name + ' — ' + err.message);
+    }
+  }
+
+  const tr = traces();
+  if (!state.refId && tr.length)    state.refId    = tr[0].id;
+  if (!state.activeId && tr.length) state.activeId = tr[0].id;
+  // a first annotation row at the bottom of the stack, once there is something to annotate
+  if (tr.length && !texts().length) addTextRow('', 0);
+  $('#empty').classList.toggle('hidden', tr.length > 0);
+
+  measureCell();
+  if (files.length && tr.length) fitAll();
+  runSearch(); refreshRails(); render();
+
+  if (errors.length){
+    $('#hint').innerHTML = '<b style="color:var(--accent)">Not loaded: ' + esc(errors.join(' ; ')) + '</b>';
+  }
+}
+
+function fitAll(){
+  const e = extent();
+  const w = cellRect ? cellRect.width : 800;
+  view.pxpb = Math.max(1.2, Math.min(24, w / Math.max(1, e.max - e.min)));
+  view.left = e.min;
+  $('#zval').textContent = view.pxpb.toFixed(1);
+  clampView(); render();
+}
+
+/* ============================================================
+   11. UI WIRING
+   ============================================================ */
+function measureCell(){
+  const cell = document.querySelector('.rulerrow .cell');
+  cellRect = cell.getBoundingClientRect();
+}
+
+$('#file').addEventListener('change',  e => { loadFiles(e.target.files); e.target.value = ''; });
+$('#file2').addEventListener('change', e => { loadFiles(e.target.files); e.target.value = ''; });
+
+$('#q').addEventListener('input', e => {
+  state.query = e.target.value.toUpperCase().replace(/[^ACGTNRYSWKMBDHV]/g, '');
+  if (e.target.value !== state.query) e.target.value = state.query;
+  runSearch(); render();
+});
+$('#next').onclick = () => gotoMatch(1);
+$('#prev').onclick = () => gotoMatch(-1);
+
+$('#zi').onclick = () => { setZoom(view.pxpb * 1.3); $('#zval').textContent = view.pxpb.toFixed(1); };
+$('#zo').onclick = () => { setZoom(view.pxpb / 1.3); $('#zval').textContent = view.pxpb.toFixed(1); };
+$('#fit').onclick = fitAll;
+
+$('#amp').addEventListener('input', e => { state.amp = +e.target.value; render(); });
+$('#lh').addEventListener('input',  e => { state.laneH = +e.target.value; render(); });
+
+$('#resetoff').onclick = () => {
+  for (const r of state.rows) if (!r.locked) r.offset = 0;
+  refreshRails(); render();
+};
+
+$('#addnote').onclick = () => {
+  // inserted right below the active row, so you can annotate between two traces
+  const n = addTextRow('', Math.round(view.left + viewportBases() * 0.1), state.activeId);
+  state.caret = {id: n.id, col: 0};
+  setActive(n.id);
+  n.canvas.focus();
+  n.el.scrollIntoView({block: 'nearest'});
+  syncScrollbar();
+};
+
+$('#theme').onclick = () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const isDark = cur ? cur === 'dark'
+    : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  try { localStorage.setItem('sanger-theme', isDark ? 'light' : 'dark'); } catch (_){}
+  refreshColors(); render();
+};
+
+/* PNG export of the current view (ruler + rows) */
+$('#png').onclick = () => {
+  if (!state.rows.length) return;
+  const w = cellRect.width, gap = 2, RAIL = 210;
+  const rowH = r => r.kind === 'trace' ? state.laneH : NOTE_H;
+  const h = 28 + state.rows.reduce((s, r) => s + rowH(r) + gap, 0);
+  const out = document.createElement('canvas');
+  out.width = Math.round((RAIL + w) * DPR); out.height = Math.round(h * DPR);
+  const ctx = out.getContext('2d');
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = COL.lane; ctx.fillRect(0, 0, RAIL + w, h);
+  ctx.drawImage(rulerEl, RAIL, 0, w, 28);
+  let y = 28;
+  for (const r of state.rows){
+    const rh = rowH(r);
+    ctx.drawImage(r.canvas, RAIL, y, w, rh);
+    ctx.font = '600 12px ' + MONO;
+    ctx.fillStyle = COL.ink;
+    ctx.fillText(r.name.slice(0, 26), 8, y + (r.kind === 'trace' ? 16 : 17));
+    if (r.kind === 'trace'){
+      ctx.font = '400 11px ' + MONO;
+      ctx.fillStyle = COL.muted;
+      ctx.fillText('offset ' + (r.offset > 0 ? '+' : '') + r.offset, 8, y + 32);
+    }
+    y += rh + gap;
+  }
+  out.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'chromatograms.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+};
+
+/* drag and drop */
+['dragenter', 'dragover'].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault(); document.body.classList.add('dropping');
+}));
+['dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault();
+  if (ev === 'drop' || e.relatedTarget === null) document.body.classList.remove('dropping');
+}));
+document.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files.length) loadFiles(e.dataTransfer.files); });
+
+/* resizing */
+const ro = new ResizeObserver(() => { measureCell(); clampView(); render(); });
+ro.observe(document.querySelector('.rulerrow .cell'));
+window.addEventListener('resize', () => { measureCell(); clampView(); render(); });
+
+/* ============================================================
+   12. STARTUP
+   ============================================================ */
+try {
+  const saved = localStorage.getItem('sanger-theme');
+  if (saved) document.documentElement.setAttribute('data-theme', saved);
+} catch (_){}
+
+refreshColors();
+measureCell();
+$('#zval').textContent = view.pxpb.toFixed(1);
+render();
+
+// the web font may land late: redraw so the grid stays exact
+if (document.fonts && document.fonts.ready){
+  document.fonts.ready.then(() => render());
+}
+</script>
+</body>
+</html>

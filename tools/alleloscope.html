@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+<title>Allele figure builder</title>
+<style>
+  :root {
+    --ink: #1a1a18;
+    --ink-soft: #6b6a64;
+    --rule: #b8b6ae;
+    --paper: #ffffff;
+    --panel: #f4f3ef;
+
+    --exon-fill: #b5d4f4;
+    --exon-line: #185fa5;
+    --guide: #ba7517;
+    --guide-text: #854f0b;
+    --del-fill: #f7c1c1;
+    --del-line: #a32d2d;
+    --del-text: #791f1f;
+    --ins: #3b6d11;
+    --sub-fill: #bfe0d8;
+    --sub-line: #1f7a6b;
+    --sub-text: #145a4e;
+    --dom-fill: #afa9ec;
+    --dom-line: #534ab7;
+    --dom-text: #3c3489;
+    --prot-fill: #d3d1c7;
+    --prot-line: #5f5e5a;
+    --mut-fill: #f6dcbe;
+    --mut-line: #a4671a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font: 400 14px/1.6 "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink); background: var(--paper);
+  }
+  h1 { font-size: 18px; font-weight: 500; margin: 0 0 16px; }
+  .wrap { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 20px; align-items: start; max-width: 1100px; }
+  label { display: block; font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; }
+  textarea {
+    width: 100%; height: 460px; padding: 10px;
+    font: 12px/1.6 "SF Mono", Menlo, Consolas, monospace;
+    border: 1px solid var(--rule); border-radius: 6px; resize: vertical;
+    background: var(--panel); color: var(--ink);
+  }
+  button {
+    margin-top: 10px; width: 100%; height: 36px;
+    font: 500 14px/1 inherit; color: var(--ink);
+    background: transparent; border: 1px solid var(--rule); border-radius: 6px; cursor: pointer;
+  }
+  button:hover { background: var(--panel); }
+  .opt { margin-top: 10px; font-size: 13px; color: var(--ink-soft); }
+  .opt input { vertical-align: -1px; }
+  #err { font-size: 13px; color: var(--del-line); margin: 6px 0 0; min-height: 18px; }
+  #dirty { font-size: 12.5px; color: var(--ink-soft); margin: 8px 0 0; min-height: 17px; }
+  #dirty.unsaved { color: var(--del-text); }
+  #out { min-width: 0; border: 1px solid var(--rule); border-radius: 6px; padding: 8px; }
+  /* the SVG carries absolute width/height for PowerPoint; scale it here only */
+  #out svg { display: block; width: 100%; height: auto; touch-action: none;
+             -webkit-user-select: none; user-select: none; }
+  /* every label carries a data-k handle, so it can be dragged to a better spot */
+  #out text[data-k] { cursor: grab; }
+  #out text[data-k]:active { cursor: grabbing; }
+  details { margin-top: 12px; font-size: 12.5px; color: var(--ink-soft); }
+  details summary { cursor: pointer; }
+  details code { font-family: "SF Mono", Menlo, Consolas, monospace; color: var(--ink); }
+  details p { margin: 6px 0; }
+
+  /* ---- sequence panel: plain HTML, deliberately not part of the SVG ---- */
+  #seqwrap { max-width: 1100px; margin: 28px 0 0; }
+  #seqwrap h2 { font-size: 16px; font-weight: 500; margin: 0 0 12px; }
+  .seqgrid { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 20px; align-items: start; }
+  #seq { height: 150px; }
+  #seqinfo, #seqwarn { font-size: 12.5px; margin: 6px 0 0; }
+  #seqinfo, #seqwarn { color: var(--ink-soft); }
+  #seqwarn .bad { color: var(--del-line); }
+  .seqhead { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .seqhead select { font: 13px inherit; padding: 5px 6px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); color: var(--ink); }
+  button.mini { margin: 0; width: auto; height: 30px; padding: 0 10px; font-size: 12.5px; }
+  .seqbox { margin-top: 14px; }
+  .seqbox h3 { font-size: 13px; font-weight: 500; margin: 0 0 4px; color: var(--ink-soft); }
+  .seqbox pre {
+    margin: 0; padding: 8px 10px; max-height: 260px; overflow: auto;
+    border: 1px solid var(--rule); border-radius: 6px; background: var(--panel);
+    font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace; white-space: pre;
+  }
+  .seqbox .num { display: inline-block; width: 5em; padding-right: 1em; text-align: right; color: var(--ink-soft); }
+  .s-in  { color: var(--ink-soft); }
+  .s-utr { background: #e8f1fb; color: var(--exon-line); }
+  .s-cds { background: var(--exon-fill); color: #0d3f70; font-weight: 700; }
+  .s-stop { background: var(--del-fill); color: var(--del-text); font-weight: 700; }
+  .s-mut { background: #fbe3c8; color: #8a4a08; font-weight: 700; }
+  .s-unk { background: #ebe9e2; color: var(--ink-soft); font-weight: 700; }
+  #alleles h2 { font-size: 13px; font-weight: 500; margin: 22px 0 2px; color: var(--ink); }
+  .allele h3 { display: flex; align-items: center; gap: 10px; color: var(--ink); }
+  .asum { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 4px; }
+  .asum .bad { color: var(--del-line); }
+  .aseq { margin: 8px 0 0; }
+  .aseq summary { color: var(--ink-soft); font-size: 12.5px; }
+  .aseq h4 { display: flex; align-items: center; gap: 10px;
+             font-size: 12.5px; font-weight: 500; margin: 10px 0 4px; color: var(--ink-soft); }
+  .aseq pre { margin: 0; padding: 8px 10px; max-height: 220px; overflow: auto;
+              border: 1px solid var(--rule); border-radius: 6px; background: var(--panel);
+              font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace; white-space: pre; }
+  .aseq .num { display: inline-block; width: 5em; padding-right: 1em; text-align: right; color: var(--ink-soft); }
+  .legend { font-size: 12px; color: var(--ink-soft); margin: 8px 0 0; }
+  .legend span { padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Allele figure builder</h1>
+
+<div class="wrap">
+  <div>
+    <label for="spec">Coordonnees</label>
+    <textarea id="spec" spellcheck="false">scale independent
+
+gene PsMAX1a 6655
+exon 745 983
+exon 3926 4078
+exon 4378 5146
+exon 5230 5325
+exon 5397 5744
+guide sgRNA1 882 901
+guide sgRNA2 5535 5554
+allele max1a-3 del 892 5356 del 5535 5538
+allele max1a-4 del 884 925 ins 925 7 ins 1485 3 del 1485 5575
+protein 512
+domain ExxR 300 312
+domain heme 440 462
+trunc max1a-1 138
+trunc max1a-2 145
+trunc max1a-3 61
+
+
+</textarea>
+    <p id="err"></p>
+    <label class="opt"><input type="checkbox" id="shared"> Meme echelle pour tous les genes</label>
+    <button id="dl">Telecharger le SVG</button>
+    <button id="reset">Remettre les etiquettes en place</button>
+    <button id="save">Enregistrer le projet (.txt)</button>
+    <button id="open">Ouvrir un projet (.txt)</button>
+    <input type="file" id="openfile" accept=".txt,text/plain" style="display: none">
+    <p id="dirty"></p>
+
+    <details>
+      <summary>Syntaxe</summary>
+      <p>Chaque ligne <code>gene &lt;nom&gt; &lt;longueur&gt;</code> ouvre un bloc. Tout ce qui
+         suit (exons, guides, alleles, proteine) appartient a ce gene jusqu au prochain
+         <code>gene</code>. Les blocs sont empiles de haut en bas.</p>
+      <p><code>exon &lt;debut&gt; &lt;fin&gt;</code><br>
+         <code>guide &lt;nom&gt; &lt;debut&gt; &lt;fin&gt;</code><br>
+         <code>allele &lt;nom&gt; &lt;lesion&gt;...</code> avec <code>del d f</code>,
+         <code>ins pos pb</code>, <code>sub d f</code>, <code>snp pos</code> ; un mot sans
+         espace apres une lesion remplace sa legende<br>
+         <code>protein &lt;aa&gt;</code> / <code>domain &lt;nom&gt; &lt;d&gt; &lt;f&gt;</code> /
+         <code>trunc &lt;nom&gt; &lt;aa&gt; [&lt;premier residu modifie&gt;]</code> :
+         la partie modifiee est dessinee en orange sur la barre de la proteine ;
+         le bouton <em>Ecrire protein et trunc</em> remplit ces nombres, ainsi que
+         la ligne <code>protein</code>, a partir de la traduction<br>
+         <code>scale shared</code> ou <code>scale independent</code> (ligne globale) :
+         echelle commune calee sur le gene le plus long, ou bien chaque gene occupe
+         toute la largeur</p>
+      <p>Les etiquettes du dessin se deplacent a la souris. Chaque deplacement est
+         reecrit en bas du texte sous la forme
+         <code>nudge &lt;cle&gt; &lt;dx&gt; &lt;dy&gt;</code> : il est donc conserve avec le
+         fichier et applique a l export SVG.</p>
+      <p>Les <code>exon</code> sont pris comme etant le CDS : ils sont episses puis
+         traduits tels quels, a partir du premier nucleotide du premier exon.
+         Aucun cadre de lecture n est cherche ni corrige ; si quelque chose ne
+         colle pas, c est signale sous les boites, sans rien changer.</p>
+      <p><code>strand -</code> : la sequence collee est le brin complementaire
+         (les coordonnees, elles, restent celles du gene).</p>
+      <p>Pour deduire la proteine mutante, donnez la sequence ajoutee plutot que
+         sa longueur : <code>ins 925 GATTACA</code>, <code>sub 3000 3010 ACGT...</code>,
+         <code>snp 1220 G&gt;A</code>. Avec une simple longueur (<code>ins 925 7</code>)
+         le decalage du cadre est connu mais les residus au point d insertion ne
+         le sont pas : ils sont notes X.</p>
+      <p>Une ligne commencant par # est un commentaire.</p>
+    </details>
+  </div>
+  <div id="out"></div>
+</div>
+
+<section id="seqwrap">
+  <h2>Sequences</h2>
+  <div class="seqgrid">
+    <div>
+      <label for="seq">Sequence genomique du gene, 5' -&gt; 3' (FASTA, un ou plusieurs genes)</label>
+      <textarea id="seq" spellcheck="false" placeholder="&gt;PsMAX1a
+ATGGCT..."></textarea>
+      <p id="seqinfo"></p>
+    </div>
+    <div>
+      <div class="seqhead">
+        <select id="whichgene"></select>
+        <button class="mini" data-copy="gen">Copier genomique</button>
+        <button class="mini" data-copy="cds">Copier CDS</button>
+        <button class="mini" data-copy="prot">Copier proteine</button>
+        <button class="mini" id="fasta">Telecharger FASTA</button>
+        <button class="mini" id="wtrunc" disabled>Ecrire protein et trunc</button>
+      </div>
+      <p id="seqwarn"></p>
+      <div class="seqbox"><h3>Genomique <span id="genlen"></span></h3><pre id="gen"></pre></div>
+      <div class="seqbox"><h3>CDS, exons episses <span id="cdslen"></span></h3><pre id="cds"></pre></div>
+      <div class="seqbox"><h3>Proteine <span id="protlen"></span></h3><pre id="prot"></pre></div>
+      <div id="alleles"></div>
+      <p class="legend">
+        <span class="s-cds">exon = CDS</span>
+        <span class="s-in">intron (minuscules)</span>
+        <span class="s-stop">codon stop interne</span>
+        <span class="s-mut">modifie</span>
+        <span class="s-unk">inconnu</span>
+      </p>
+    </div>
+  </div>
+</section>
+
+<script>
+// ---------------------------------------------------------------
+// 1. LAYOUT CONSTANTS -- change these to reshape the whole figure
+// ---------------------------------------------------------------
+const VIEW_W    = 680;   // SVG coordinate width; 1 unit = 1 px at 100% scale
+const X0        = 140;   // left edge of the track area (space for row labels)
+const X1        = 630;   // right edge of the track area
+const TRACK_W   = X1 - X0;
+const ROW_H     = 34;    // vertical pitch between allele rows
+const PROT_ROW_H= 26;    // vertical pitch between truncated-protein rows
+const GENE_GAP  = 34;    // whitespace between two gene blocks
+const PAD_BOTTOM= 24;    // whitespace under the last element
+
+// ---------------------------------------------------------------
+// 2. PARSER -- one keyword per line, whitespace separated
+// ---------------------------------------------------------------
+const ARITY = { del: 2, ins: 2, sub: 2, snp: 1 };   // numbers each lesion takes
+const NUC = /^[ACGTNacgtn]+$/;                     // a nucleotide argument
+const isLesion = (t) => Object.prototype.hasOwnProperty.call(ARITY, t);
+
+// a gene block owns everything declared under it, its protein included
+function newGene(name, len) {
+  return { name, len, exons: [], guides: [], alleles: [], protein: 0, domains: [], truncs: [],
+           strand: 1 };
+}
+
+function parseSpec(text) {
+  const model = {
+    genes:  [],        // one block per "gene" line, drawn top to bottom
+    shared: false,     // true -> every gene uses the scale of the longest one
+    nudges: {},        // label key -> {dx, dy}, rewritten when you drag a label
+    errors: []
+  };
+  let g = null;        // the gene block currently being filled
+
+  text.split('\n').forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) return;
+    const p = line.split(/\s+/);
+    const kw = p[0].toLowerCase();
+    const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : NaN; };
+
+    // every keyword but the two global ones belongs to the gene block above it
+    if (kw !== 'gene' && kw !== 'scale' && kw !== 'nudge' && !g) {
+      model.errors.push('Ligne ' + (i + 1) + ' : "' + p[0] + '" avant toute ligne "gene".');
+      return;
+    }
+
+    switch (kw) {
+      case 'scale':
+        model.shared = (p[1] || '').toLowerCase() === 'shared';
+        break;
+      case 'nudge':   // hand-made offset for one label, written by the dragging
+        model.nudges[p[1]] = { dx: num(p[2]) || 0, dy: num(p[3]) || 0 };
+        break;
+      case 'gene': {
+        const name = p[1] || ('gene' + (model.genes.length + 1));
+        g = newGene(name, num(p[2]));
+        model.genes.push(g);
+        if (!(g.len > 0))
+          model.errors.push('Ligne ' + (i + 1) + ' : longueur de "' + name + '" manquante ou invalide.');
+        break;
+      }
+      case 'exon':
+        g.exons.push({ s: num(p[1]), e: num(p[2]) });
+        break;
+      case 'guide':
+        g.guides.push({ name: p[1], s: num(p[2]), e: num(p[3]) });
+        break;
+      case 'allele': {
+        const name = p[1];
+        if (!name) { model.errors.push('Ligne ' + (i + 1) + ' : nom d allele manquant.'); break; }
+        // lesions are repeatable, each followed by an optional free-text label
+        // (no spaces) that overrides its caption:
+        //   del <debut> <fin>      ins <position> <pb>
+        //   sub <debut> <fin>      snp <position> [G>A]
+        const lesions = [];
+        let k = 2;
+        while (k < p.length) {
+          const t = p[k].toLowerCase();
+          if (t === 'wt') { k += 1; continue; }
+          if (!isLesion(t)) {
+            model.errors.push('Ligne ' + (i + 1) + ' : lesion inconnue "' + p[k] + '".');
+            break;
+          }
+          // "ins <pos> <nb pb>", or better "ins <pos> <sequence inseree>": with
+          // only a length the residues at the junction cannot be known
+          if (t === 'ins') {
+            const at = num(p[k + 1]);
+            const what = p[k + 2] || '';
+            const isSeq = NUC.test(what);
+            const bp = isSeq ? what.length : num(what);
+            if (!Number.isFinite(at) || !Number.isFinite(bp) || bp <= 0) {
+              model.errors.push('Ligne ' + (i + 1) + ' : "ins" attend une position puis un nombre de pb ou la sequence inseree.');
+              break;
+            }
+            k += 3;
+            let lab = '';
+            if (k < p.length && !isLesion(p[k].toLowerCase()) && p[k].toLowerCase() !== 'wt') { lab = p[k]; k += 1; }
+            lesions.push({ type: 'ins', s: at, e: bp, seq: isSeq ? what.toUpperCase() : '', label: lab });
+            continue;
+          }
+
+          const n = ARITY[t];                       // how many numbers it takes
+          const args = p.slice(k + 1, k + 1 + n).map(num);
+          if (args.length < n || args.some(v => !Number.isFinite(v))) {
+            model.errors.push('Ligne ' + (i + 1) + ' : "' + t + '" attend ' + n + ' nombre(s).');
+            break;
+          }
+          k += 1 + n;
+          let label = '';
+          if (k < p.length && !isLesion(p[k].toLowerCase()) && p[k].toLowerCase() !== 'wt') {
+            label = p[k]; k += 1;
+          }
+          const s = args[0], e = args.length > 1 ? args[1] : 0;
+          const les = (t === 'del' || t === 'sub')
+            ? { type: t, s: Math.min(s, e), e: Math.max(s, e), label }   // span
+            : { type: t, s, e, label };                                 // point
+          // a nucleotide label is not a caption, it is the replacement itself
+          if (t === 'sub' && NUC.test(label)) { les.seq = label.toUpperCase(); les.label = ''; }
+          if (t === 'snp') {
+            const mm = /^([ACGTN])>([ACGTN])$/i.exec(label);
+            if (mm) les.to = mm[2].toUpperCase();
+            else if (label.length === 1 && NUC.test(label)) les.to = label.toUpperCase();
+          }
+          lesions.push(les);
+        }
+        // repeating an allele name adds its lesions to the row already created
+        const prev = g.alleles.find(a => a.name === name);
+        if (prev) prev.lesions.push(...lesions);
+        else g.alleles.push({ name, lesions });
+        break;
+      }
+      case 'protein':
+        g.protein = num(p[1]);
+        break;
+      case 'strand':   // '-' means the pasted sequence is the other strand
+        g.strand = (p[1] === '-') ? -1 : 1;
+        break;
+      case 'domain':
+        g.domains.push({ name: p[1], s: num(p[2]), e: num(p[3]) });
+        break;
+      case 'trunc': {
+        // third number, optional: the first residue that differs from the
+        // wild type, so the changed stretch can be drawn apart
+        const from = p[3] !== undefined ? num(p[3]) : 0;
+        const prev = g.truncs.find(t => t.name === p[1]);
+        if (prev) { prev.aa = num(p[2]); prev.from = from; }   // last declaration wins
+        else g.truncs.push({ name: p[1], aa: num(p[2]), from });
+        break;
+      }
+      default:
+        model.errors.push('Ligne ' + (i + 1) + ' : mot-cle inconnu "' + p[0] + '"');
+    }
+  });
+
+  if (!model.genes.length) model.errors.push('Aucun gene declare.');
+
+  // a coordinate outside its gene is almost always a typo: name it, draw anyway
+  // (the scale clamps it to the track so it cannot escape the viewBox)
+  for (const gn of model.genes) {
+    if (!(gn.len > 0)) continue;
+    const bad = [];
+    const check = (what, lo, hi) => { if (!(lo >= 1) || !(hi <= gn.len)) bad.push(what); };
+    gn.exons.forEach(x => check('exon ' + x.s + '-' + x.e, x.s, x.e));
+    gn.guides.forEach(x => check('guide ' + x.name, x.s, x.e));
+    gn.alleles.forEach(a => a.lesions.forEach(l =>
+      check(a.name + ' ' + l.type + ' ' + l.s, l.s, (l.type === 'del' || l.type === 'sub') ? l.e : l.s)));
+    if (bad.length)
+      model.errors.push(gn.name + ' : hors du gene (' + gn.len + ' pb) : ' + bad.join(', ') + '.');
+  }
+  return model;
+}
+
+// ---------------------------------------------------------------
+// 3. RENDERER -- model -> SVG string
+// ---------------------------------------------------------------
+const esc = (s) => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const f = (n) => Number(n).toFixed(1);
+
+// PowerPoint drops <style>/class when it converts an SVG to editable shapes,
+// so every text node spells its font out as presentation attributes instead.
+const FONT = 'Arial, Helvetica, sans-serif';
+
+// Every label is draggable. Its position stays (computed x,y) + a manual nudge,
+// so the layout is still derived from the coordinates and the nudge only has
+// the last word on top of it. The handle is a key built from what the label IS,
+// never from a DOM node, so it survives the full re-render on every keystroke.
+let NUDGE = {};        // key -> {dx, dy}, mirror of the "nudge" lines
+let usedKeys;          // stops two labels from claiming the same key
+let topMost, lowMost;  // ink extent, so a dragged label cannot fall off the SVG
+
+function K(base) {
+  let k = base.replace(/\s+/g, '_'), i = 2;
+  while (usedKeys.has(k)) k = base + '#' + (i++);
+  usedKeys.add(k);
+  return k;
+}
+const nudgeOf = (k) => NUDGE[k] || { dx: 0, dy: 0 };
+
+function txt(x, y, body, o = {}) {
+  const n = o.key ? nudgeOf(o.key) : { dx: 0, dy: 0 };
+  const size = o.size || 12;
+  topMost = Math.min(topMost, y + n.dy - size);
+  lowMost = Math.max(lowMost, y + n.dy + 4);
+  return `<text x="${f(x)}" y="${f(y)}" font-family="${FONT}" font-size="${size}"`
+       + ` fill="${o.fill || 'var(--ink-soft)'}"`
+       + (o.anchor ? ` text-anchor="${o.anchor}"` : '')
+       + (o.key ? ` data-k="${o.key}"` : '')
+       + (n.dx || n.dy ? ` transform="translate(${f(n.dx)},${f(n.dy)})"` : '')
+       + `>${body}</text>`;
+}
+
+// caption stacking: two close lesions must not print on top of each other
+const LBL_H = 13;                        // vertical pitch between caption levels
+const txtW  = (s) => 6.2 * String(s).length + 6;
+function levelsFor(caps) {               // -> level index for each caption
+  const taken = [];
+  return caps.map(c => {
+    const L = c.x - txtW(c.txt) / 2, R = c.x + txtW(c.txt) / 2;
+    let n = 0;
+    while (taken[n] && taken[n].some(([l, r]) => L < r + 4 && l < R + 4)) n++;
+    (taken[n] = taken[n] || []).push([L, R]);
+    return n;
+  });
+}
+
+// draws one gene block from the baseline y and returns the baseline of its last
+// row, so the caller can stack the next gene underneath it
+function renderGene(gene, ntX, y, out) {
+  const { exons, guides, alleles, protein, domains, truncs } = gene;
+  const aaX = v => X0 + (v / protein) * TRACK_W;   // the aa scale is per gene too
+  const end = ntX(gene.len);                       // right end of THIS gene
+
+  // --- gene name; the length keeps two genes at different scales honest
+  out.push(txt(X0, y, esc(gene.name) + '  (' + gene.len + ' pb)',
+                { size: 14, fill: 'var(--ink)', key: K(gene.name + '.title') }));
+  y += 36;
+
+  // --- gene model: intron line + exon boxes
+  out.push(`<line x1="${X0}" y1="${y}" x2="${f(end)}" y2="${y}" stroke="var(--rule)" stroke-width="1"/>`);
+  for (const ex of exons) {
+    const w = Math.max(2, ntX(ex.e) - ntX(ex.s));
+    out.push(`<rect x="${f(ntX(ex.s))}" y="${y - 9}" width="${f(w)}" height="18" rx="2" fill="var(--exon-fill)" stroke="var(--exon-line)" stroke-width="0.5"/>`);
+  }
+
+  // --- guide ticks, drawn after the exons and stopping at their top edge, so
+  //     the sgRNA sits above the gene model instead of running across it
+  for (const gd of guides) {
+    const gx = (ntX(gd.s) + ntX(gd.e)) / 2;
+    const onExon = exons.some(ex => gd.s <= ex.e && gd.e >= ex.s);
+    const foot = onExon ? y - 9 : y;   // exon top edge, or the intron line
+    out.push(`<line x1="${f(gx)}" y1="${y - 20}" x2="${f(gx)}" y2="${f(foot)}" stroke="var(--guide)" stroke-width="1"/>`);
+    out.push(txt(gx, y - 25, esc(gd.name),
+                  { fill: 'var(--guide-text)', anchor: 'middle', key: K(gene.name + '.guide.' + gd.name) }));
+  }
+  // room for the first allele row, or just some air when the block stops here
+  y += alleles.length ? 40 : (protein > 0 ? 26 : 12);
+
+  // --- one row per allele, carrying any number of lesions
+  for (const a of alleles) {
+    const span = (l) => ({ ...l, bp: l.e - l.s + 1, l: ntX(l.s), r: Math.max(ntX(l.s) + 1.5, ntX(l.e)) });
+    const dels = a.lesions.filter(l => l.type === 'del').map(span).sort((u, v) => u.l - v.l);
+    const subs = a.lesions.filter(l => l.type === 'sub').map(span);
+    const inss = a.lesions.filter(l => l.type === 'ins');
+    const snps = a.lesions.filter(l => l.type === 'snp');
+
+    // caption = the lesion's own label when given, else the default wording
+    const caps = [
+      ...dels.map(d => ({ x: (d.l + d.r) / 2, txt: d.label || '−' + d.bp + ' pb',
+                          col: 'var(--del-text)', dy: 11, foot: 7, id: 'del' + d.s })),
+      ...subs.map(s => ({ x: (s.l + s.r) / 2, txt: s.label || s.bp + ' pb subst.',
+                          col: 'var(--sub-text)', dy: 11, foot: 7, id: 'sub' + s.s })),
+      ...inss.map(n => ({ x: ntX(n.s), txt: n.label || '+' + n.e + ' pb',
+                          col: 'var(--ins)', dy: 15, foot: 12, id: 'ins' + n.s })),
+      ...snps.map(n => ({ x: ntX(n.s), txt: n.label || 'SNP',
+                          col: 'var(--sub-text)', dy: 12, foot: 6, id: 'snp' + n.s }))
+    ].sort((u, v) => u.x - v.x);
+    const lvl = levelsFor(caps);
+    y += Math.max(0, ...lvl) * LBL_H;      // reserve room for the stacked captions
+
+    out.push(txt(X0 - 12, y + 4, esc(a.name), { anchor: 'end', key: K(gene.name + '.allele.' + a.name) }));
+
+    // intact sequence = the gene minus the union of the deletions
+    let cursor = X0;
+    for (const d of dels) {
+      if (d.l > cursor) out.push(`<line x1="${f(cursor)}" y1="${y}" x2="${f(d.l)}" y2="${y}" stroke="var(--rule)" stroke-width="1"/>`);
+      cursor = Math.max(cursor, d.r);
+    }
+    if (cursor < end) out.push(`<line x1="${f(cursor)}" y1="${y}" x2="${f(end)}" y2="${y}" stroke="var(--rule)" stroke-width="1"/>`);
+
+    // a substitution keeps the sequence continuous: it sits ON the intact line
+    for (const s of subs)
+      out.push(`<rect x="${f(s.l)}" y="${y - 6}" width="${f(s.r - s.l)}" height="12" rx="2" fill="var(--sub-fill)" stroke="var(--sub-line)" stroke-width="0.5"/>`);
+    for (const d of dels)
+      out.push(`<rect x="${f(d.l)}" y="${y - 6}" width="${f(d.r - d.l)}" height="12" rx="2" fill="var(--del-fill)" stroke="var(--del-line)" stroke-width="0.5"/>`);
+    for (const n of inss) {
+      const ix = ntX(n.s);
+      out.push(`<polygon points="${f(ix - 5)},${y - 11} ${f(ix + 5)},${y - 11} ${f(ix)},${y - 1}" fill="var(--ins)"/>`);
+    }
+    for (const n of snps) {   // single base change: a small lozenge on the line
+      const ix = ntX(n.s);
+      out.push(`<polygon points="${f(ix)},${y - 6} ${f(ix + 5)},${y} ${f(ix)},${y + 6} ${f(ix - 5)},${y}" fill="var(--sub-line)" stroke="var(--paper)" stroke-width="0.5"/>`);
+    }
+
+    caps.forEach((c, i) => {
+      const key = K(gene.name + '.cap.' + a.name + '.' + c.id);
+      const nd  = nudgeOf(key);
+      const ly  = y - c.dy - lvl[i] * LBL_H;
+      // a stacked caption, or one dragged clear of its lesion, needs a leader
+      // line -- and that line has to start from where the caption ended up
+      if (lvl[i] > 0 || Math.abs(nd.dx) > 2 || Math.abs(nd.dy) > 2)
+        out.push(`<line x1="${f(c.x + nd.dx)}" y1="${f(ly + nd.dy + 3)}" x2="${f(c.x)}" y2="${f(y - c.foot)}" stroke="${c.col}" stroke-width="0.5"/>`);
+      out.push(txt(c.x, ly, esc(c.txt), { fill: c.col, anchor: 'middle', key }));
+    });
+    y += ROW_H;
+  }
+
+  // --- protein panel, drawn only for the genes that declared one
+  if (protein > 0) {
+    y += 18;
+    out.push(txt(X0, y, 'Proteine ' + esc(gene.name) + ' (' + protein + ' aa)',
+                  { size: 14, fill: 'var(--ink)', key: K(gene.name + '.prot') }));
+    y += 22;
+
+    out.push(`<rect x="${X0}" y="${y - 9}" width="${TRACK_W}" height="18" rx="3" fill="none" stroke="var(--rule)" stroke-width="0.5"/>`);
+    for (const d of domains) {
+      const w = Math.max(3, aaX(d.e) - aaX(d.s));
+      out.push(`<rect x="${f(aaX(d.s))}" y="${y - 9}" width="${f(w)}" height="18" rx="2" fill="var(--dom-fill)" stroke="var(--dom-line)" stroke-width="0.5"/>`);
+      out.push(txt((aaX(d.s) + aaX(d.e)) / 2, y - 14, esc(d.name),
+                    { fill: 'var(--dom-text)', anchor: 'middle', key: K(gene.name + '.domain.' + d.name) }));
+    }
+    y += 32;
+
+    // one row per "trunc" line, in the order they were declared: an allele does
+    // not need a lesion row above to have its truncated protein drawn
+    let drawn = 0;
+    for (const t of truncs) {
+      if (!(t.aa > 0)) continue;
+      out.push(txt(X0 - 12, y + 4, esc(t.name), { anchor: 'end', key: K(gene.name + '.trunc.' + t.name) }));
+      // residues 1..from-1 read like the wild type, from..end do not
+      const xEnd = Math.max(X0 + 2, aaX(t.aa));
+      const hasMut = t.from > 0 && t.from <= t.aa;
+      const xDiv = hasMut ? Math.min(xEnd, Math.max(X0, aaX(t.from - 1))) : xEnd;
+      // the untouched residues are drawn like the reference protein bar above:
+      // an empty outline, so only what the allele changed carries a colour
+      if (xDiv > X0 + 0.5)
+        out.push(`<rect x="${X0}" y="${y - 7}" width="${f(xDiv - X0)}" height="14" rx="2" fill="none" stroke="var(--rule)" stroke-width="0.5"/>`);
+      if (hasMut && xEnd > xDiv)
+        out.push(`<rect x="${f(xDiv)}" y="${y - 7}" width="${f(xEnd - xDiv)}" height="14" rx="2" fill="var(--mut-fill)" stroke="var(--mut-line)" stroke-width="0.5"/>`);
+      out.push(`<line x1="${f(aaX(t.aa))}" y1="${y - 11}" x2="${f(aaX(t.aa))}" y2="${y + 11}" stroke="var(--del-line)" stroke-width="1.5"/>`);
+      out.push(txt(aaX(t.aa) + 7, y + 4, t.aa + ' aa',
+                    { fill: 'var(--del-text)', key: K(gene.name + '.trunc.' + t.name + '.aa') }));
+      y += PROT_ROW_H;
+      drawn++;
+    }
+    if (drawn) y -= 18;   // step back onto the last row drawn, plus a little air
+  }
+  return y;
+}
+
+function renderSVG(model) {
+  const genes = model.genes.filter(g => g.len > 0);
+  if (!genes.length) return '';
+
+  NUDGE    = model.nudges;   // the spec text is the only store of the offsets
+  usedKeys = new Set();
+  topMost  = Infinity;
+  lowMost  = 0;
+
+  const maxLen = Math.max(...genes.map(g => g.len));
+  const out = [];
+  let y = 26;                                  // baseline of the first gene name
+
+  genes.forEach((gene, i) => {
+    if (i) y += GENE_GAP;
+    // shared -> the longest gene fills the track and the others are drawn
+    // proportionally shorter; independent -> every gene fills the track
+    const den = model.shared ? maxLen : gene.len;
+    const ntX = v => Math.max(X0, Math.min(X1, X0 + (v / den) * TRACK_W));
+    y = renderGene(gene, ntX, y, out);
+  });
+
+  // viewBox height is derived, never guessed; a label dragged above the first
+  // row pushes the whole drawing down rather than being cropped by the edge
+  const shift = topMost < 4 ? Math.ceil(4 - topMost) : 0;
+  const H = Math.ceil(Math.max(y, lowMost)) + PAD_BOTTOM + shift;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${VIEW_W}" height="${H}"`
+       + ` viewBox="0 0 ${VIEW_W} ${H}" role="img">`
+       + `<title>Alleles CRISPR de ${esc(genes.map(g => g.name).join(', '))}</title>`
+       + (shift ? `<g transform="translate(0,${shift})">` : '')
+       + out.join('')
+       + (shift ? `</g>` : '')
+       + `</svg>`;
+}
+
+// ---------------------------------------------------------------
+// 4. EXPORT -- inline the styles so the file opens in Inkscape
+// ---------------------------------------------------------------
+const HEX = {
+  '--ink': '#1a1a18', '--ink-soft': '#6b6a64', '--paper': '#ffffff',
+  '--rule': '#b8b6ae', '--exon-fill': '#b5d4f4', '--exon-line': '#185fa5',
+  '--guide': '#ba7517', '--guide-text': '#854f0b',
+  '--del-fill': '#f7c1c1', '--del-line': '#a32d2d', '--del-text': '#791f1f',
+  '--ins': '#3b6d11',
+  '--sub-fill': '#bfe0d8', '--sub-line': '#1f7a6b', '--sub-text': '#145a4e',
+  '--dom-fill': '#afa9ec', '--dom-line': '#534ab7',
+  '--dom-text': '#3c3489', '--prot-fill': '#d3d1c7', '--prot-line': '#5f5e5a',
+  '--mut-fill': '#f6dcbe', '--mut-line': '#a4671a'
+};
+
+function toStandalone(svg) {
+  // resolve every CSS variable to a literal hex: PowerPoint, Illustrator and
+  // Inkscape all read presentation attributes, none of them read var().
+  const s = svg.replace(/var\((--[a-z-]+)\)/g, (m, name) => HEX[name] || '#000');
+  return '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' + s;
+}
+
+// ---------------------------------------------------------------
+// 5. WIRING
+// ---------------------------------------------------------------
+const $spec   = document.getElementById('spec');
+const $out    = document.getElementById('out');
+const $err    = document.getElementById('err');
+const $shared = document.getElementById('shared');
+
+function currentModel() {
+  const model = parseSpec($spec.value);
+  if ($shared.dataset.touched) model.shared = $shared.checked;   // the box wins
+  else $shared.checked = model.shared;                           // else follow the spec
+  return model;
+}
+
+function refresh() {
+  const model = currentModel();
+  $err.textContent = model.errors.join(' ');
+  $out.innerHTML = renderSVG(model);
+  if (window.refreshSeq) refreshSeq();   // same coordinates, separate panel
+  if (window.showDirty) showDirty();
+}
+
+document.getElementById('dl').addEventListener('click', () => {
+  const svg = toStandalone(renderSVG(currentModel()));
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = 'alleles.svg'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+// ---------------------------------------------------------------
+// 6. DRAGGING -- move any label, the spec text keeps the offset
+// ---------------------------------------------------------------
+// The offsets are written back as "nudge" lines rather than kept in a variable:
+// they are then part of the coordinates text, so they survive a re-render, they
+// are applied to the exported SVG, and they are kept by "Enregistrer le projet".
+// Nothing here writes to the .htm file itself -- a page opened from a file://
+// path cannot do that -- so an unsaved change is lost when the tab is closed.
+function writeNudges() {
+  const lines = $spec.value.split('\n').filter(l => !/^\s*nudge\b/i.test(l));
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  const keys = Object.keys(NUDGE).sort();
+  if (keys.length) {
+    lines.push('', '# etiquettes deplacees a la souris');
+    for (const k of keys) lines.push('nudge ' + k + ' ' + NUDGE[k].dx + ' ' + NUDGE[k].dy);
+  }
+  $spec.value = lines.join('\n') + '\n';
+  refresh();
+}
+
+let drag = null;
+
+$out.addEventListener('pointerdown', (e) => {
+  const el = e.target.closest && e.target.closest('text[data-k]');
+  if (!el) return;
+  const svg = el.ownerSVGElement;
+  const n = nudgeOf(el.getAttribute('data-k'));
+  drag = {
+    el, key: el.getAttribute('data-k'),
+    x: e.clientX, y: e.clientY, dx: n.dx, dy: n.dy, moved: null,
+    // the SVG is drawn at a fixed viewBox but displayed at 100% width:
+    // one screen pixel is not one user unit
+    scale: svg.viewBox.baseVal.width / svg.getBoundingClientRect().width
+  };
+  try { el.setPointerCapture(e.pointerId); } catch (_) {}
+  e.preventDefault();
+});
+
+$out.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const dx = drag.dx + (e.clientX - drag.x) * drag.scale;
+  const dy = drag.dy + (e.clientY - drag.y) * drag.scale;
+  drag.el.setAttribute('transform', 'translate(' + dx.toFixed(1) + ',' + dy.toFixed(1) + ')');
+  drag.moved = { dx: +dx.toFixed(1), dy: +dy.toFixed(1) };   // leader lines catch up on drop
+});
+
+function endDrag() {
+  if (!drag) return;
+  const m = drag.moved, k = drag.key;
+  drag = null;
+  if (!m) return;                       // a plain click moved nothing
+  if (Math.abs(m.dx) < 0.5 && Math.abs(m.dy) < 0.5) delete NUDGE[k];
+  else NUDGE[k] = m;
+  writeNudges();
+}
+$out.addEventListener('pointerup', endDrag);
+$out.addEventListener('pointercancel', endDrag);
+
+// double-click puts one label back where the layout wanted it
+$out.addEventListener('dblclick', (e) => {
+  const el = e.target.closest && e.target.closest('text[data-k]');
+  if (!el || !NUDGE[el.getAttribute('data-k')]) return;
+  delete NUDGE[el.getAttribute('data-k')];
+  writeNudges();
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+  if (!Object.keys(NUDGE).length) return;
+  NUDGE = {};
+  writeNudges();
+});
+
+// ---------------------------------------------------------------
+// 7. SEQUENCES -- genomic / CDS / protein, read off the SAME exon
+//    coordinates as the figure. None of this reaches the SVG.
+// ---------------------------------------------------------------
+// standard genetic code, indexed 16*b1 + 4*b2 + b3 with T,C,A,G = 0..3
+const CODE = 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG';
+const BASE = { T: 0, U: 0, C: 1, A: 2, G: 3 };
+const COMP = { A: 'T', T: 'A', G: 'C', C: 'G', N: 'N' };
+
+function translate(nt) {
+  let aa = '';
+  for (let i = 0; i + 2 < nt.length; i += 3) {
+    const a = BASE[nt[i]], b = BASE[nt[i + 1]], c = BASE[nt[i + 2]];
+    aa += (a === undefined || b === undefined || c === undefined)
+        ? 'X' : CODE[a * 16 + b * 4 + c];
+  }
+  return aa;
+}
+const revcomp = (x) => x.split('').reverse().map(c => COMP[c] || 'N').join('');
+
+// one or several FASTA records, or a bare sequence; digits and spaces (NCBI
+// style numbering) are dropped so a copy-paste from anywhere works
+function parseFasta(text) {
+  const recs = [];
+  let cur = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line[0] === '>') { cur = { name: line.slice(1).trim(), seq: [] }; recs.push(cur); continue; }
+    if (!cur) { cur = { name: '', seq: [] }; recs.push(cur); }
+    cur.seq.push(line.replace(/[^A-Za-z]/g, ''));
+  }
+  return recs.map(r => ({ name: r.name, seq: r.seq.join('').toUpperCase() }));
+}
+
+// a record goes to the gene named in its header; leftovers fill the remaining
+// genes in order, which is what a single unnamed paste should do
+function bindSequences(genes, recs) {
+  const map = {}, free = [];
+  for (const r of recs) {
+    const g = genes.find(g => r.name && r.name.toLowerCase().indexOf(g.name.toLowerCase()) >= 0);
+    if (g && !map[g.name]) { map[g.name] = r; continue; }
+    free.push(r);
+  }
+  for (const g of genes) if (!map[g.name] && free.length) map[g.name] = free.shift();
+  return map;
+}
+
+// everything derived for one gene: the strand-corrected genomic sequence, the
+// per-base role (intron / UTR / CDS), the spliced CDS and the protein
+function sequenceOf(gene, raw) {
+  const d = { warn: [], seq: '', cds: '', prot: '', role: [], source: '' };
+  d.seq = gene.strand < 0 ? revcomp(raw) : raw;
+  if (d.seq.length !== gene.len)
+    d.warn.push('la sequence fait ' + d.seq.length + ' nt, la ligne "gene" en annonce ' + gene.len);
+  if (!gene.exons.length) { d.warn.push('aucun exon declare.'); return d; }
+
+  const exons = gene.exons.slice().sort((a, b) => a.s - b.s);
+  const L = d.seq.length;
+
+  // transcript, plus the genomic position behind each of its bases
+  let tx = '';
+  const txPos = [];
+  for (const x of exons) {
+    for (let pos = Math.max(1, x.s); pos <= Math.min(L, x.e); pos++) {
+      tx += d.seq[pos - 1];
+      txPos.push(pos);
+    }
+  }
+  d.tx = tx;
+  d.txPos = txPos;   // transcript index -> genomic position, used by the alleles
+  d.exons = exons;
+
+  // The exons ARE the coding sequence. They are spliced and translated exactly
+  // as written, from the first base of the first exon, in frame 1. Nothing
+  // here looks for a better reading frame and nothing is trimmed: when the
+  // result looks wrong it is reported and left as it is, because the
+  // coordinates are the input, not a suggestion.
+  d.cds     = tx;
+  d.cdsFrom = exons[0].s;
+  d.cdsTo   = exons[exons.length - 1].e;
+  d.source  = 'CDS = les ' + exons.length + ' exons episses (' + d.cdsFrom + '-' + d.cdsTo +
+              '), traduits des le premier nucleotide';
+
+  d.role = new Array(L).fill('in');
+  for (const x of exons)
+    for (let pos = Math.max(1, x.s); pos <= Math.min(L, x.e); pos++)
+      d.role[pos - 1] = 'cds';
+
+  const aa = translate(d.cds);
+  // a stop is expected in last position only; any other one stays visible in
+  // the protein, at the codon where it happens
+  const trailing = aa.length > 0 && aa[aa.length - 1] === '*';
+  d.prot = trailing ? aa.slice(0, -1) : aa;
+  d.stops = [];
+  for (let i = 0; i < d.prot.length; i++) if (d.prot[i] === '*') d.stops.push(i + 1);
+
+  const rest = d.cds.length % 3;
+  if (rest)
+    d.warn.push('les exons totalisent ' + d.cds.length + ' nt, ce qui n est pas un multiple de 3 ('
+                + rest + ' nt en trop).');
+  if (d.cds.slice(0, 3) !== 'ATG')
+    d.warn.push('le premier codon est ' + d.cds.slice(0, 3) + ' et non ATG.');
+  if (!trailing)
+    d.warn.push('le dernier codon (' + d.cds.slice(d.cds.length - 3 - rest, d.cds.length - rest)
+                + ') n est pas un codon stop.');
+  if (d.stops.length)
+    d.warn.push(d.stops.length + ' codon stop a l interieur du cadre, au'
+                + (d.stops.length > 1 ? 'x codons ' : ' codon ')
+                + d.stops.slice(0, 8).join(', ') + (d.stops.length > 8 ? '...' : '') + '.');
+  if (gene.protein > 0 && d.prot.length !== gene.protein)
+    d.warn.push(d.prot.length + ' aa traduits alors que la ligne "protein" en annonce '
+                + gene.protein + '.');
+  return d;
+}
+
+// Applies one allele to the spliced CDS. Everything happens in transcript
+// coordinates, which assumes the remaining introns still splice out as in the
+// wild type -- said out loud in the panel, because a lesion sitting on a
+// splice site can break exactly that assumption.
+function mutantOf(gene, d, allele) {
+  const m = { name: allele.name, note: [], warn: [], lesions: 0 };
+  const len = d.cds.length;
+  const pos2k = new Map();
+  d.txPos.forEach((pos, k) => pos2k.set(pos, k));
+
+  const keep = new Array(len).fill(true);
+  const repl = new Array(len).fill(null);
+  const ins  = new Array(len + 1).fill('');
+  let unknown = false, boundary = false, intronic = 0;
+
+  const hitsBoundary = (a, b) => d.exons.some(x => (a <= x.s && b >= x.s) || (a <= x.e && b >= x.e));
+
+  for (const l of allele.lesions) {
+    if (l.type === 'del' || l.type === 'sub') {
+      const ks = [];
+      for (let pos = l.s; pos <= l.e; pos++) {
+        const k = pos2k.get(pos);
+        if (k !== undefined) ks.push(k);
+      }
+      if (!ks.length) { intronic++; continue; }
+      m.lesions++;
+      if (hitsBoundary(l.s, l.e)) boundary = true;
+      if (l.type === 'del') {
+        for (const k of ks) keep[k] = false;
+      } else if (l.seq) {                       // substitution with its sequence
+        for (const k of ks) keep[k] = false;
+        ins[ks[0]] += l.seq;
+      } else {                                  // sequence not given: unknown residues
+        for (const k of ks) repl[k] = 'N';
+        unknown = true;
+      }
+    } else if (l.type === 'ins') {
+      const k = pos2k.get(l.s);
+      if (k === undefined) { intronic++; continue; }
+      m.lesions++;
+      ins[k + 1] += l.seq || 'N'.repeat(l.e);
+      if (!l.seq) unknown = true;
+    } else if (l.type === 'snp') {
+      const k = pos2k.get(l.s);
+      if (k === undefined) { intronic++; continue; }
+      m.lesions++;
+      repl[k] = l.to || 'N';
+      if (!l.to) unknown = true;
+    }
+  }
+
+  // the role of each base of the result: untouched, changed, or unknown
+  const roleOf = (ch) => (ch === 'N' ? 'unk' : 'mut');
+  let out = '', outRole = [];
+  for (let k = 0; k <= len; k++) {
+    if (ins[k]) for (const ch of ins[k]) { out += ch; outRole.push(roleOf(ch)); }
+    if (k === len) break;
+    if (repl[k] !== null) { out += repl[k]; outRole.push(roleOf(repl[k])); }
+    else if (keep[k]) { out += d.cds[k]; outRole.push('keep'); }
+  }
+  m.cds = out;
+  m.cdsRole = outRole;
+
+  // The same lesions applied to the whole gene, introns included. This is the
+  // sequence you would actually amplify, so a lesion sitting in an intron --
+  // invisible in the CDS above -- does appear here.
+  const gl = d.seq.length;
+  const gkeep = new Array(gl).fill(true);
+  const grepl = new Array(gl).fill(null);
+  const gins = new Array(gl + 1).fill('');
+  for (const l of allele.lesions) {
+    if (l.type === 'del' || l.type === 'sub') {
+      const a = Math.max(1, l.s), b = Math.min(gl, l.e);
+      if (b < a) continue;
+      if (l.type === 'del') { for (let q = a; q <= b; q++) gkeep[q - 1] = false; }
+      else if (l.seq) { for (let q = a; q <= b; q++) gkeep[q - 1] = false; gins[a - 1] += l.seq; }
+      else { for (let q = a; q <= b; q++) grepl[q - 1] = 'N'; }
+    } else if (l.type === 'ins') {
+      gins[Math.min(gl, Math.max(0, l.s))] += l.seq || 'N'.repeat(l.e);
+    } else if (l.type === 'snp') {
+      if (l.s >= 1 && l.s <= gl) grepl[l.s - 1] = l.to || 'N';
+    }
+  }
+  let gseq = '', gRole = [];
+  for (let k = 0; k <= gl; k++) {
+    if (gins[k]) for (const ch of gins[k]) { gseq += ch; gRole.push(roleOf(ch)); }
+    if (k === gl) break;
+    if (grepl[k] !== null) { gseq += grepl[k]; gRole.push(roleOf(grepl[k])); }
+    else if (gkeep[k]) { gseq += d.seq[k]; gRole.push('keep'); }
+  }
+  m.gseq = gseq;
+  m.gRole = gRole;
+  m.delta = out.length - len;
+  m.shift = ((m.delta % 3) + 3) % 3;
+
+  const aa = translate(out);
+  const stop = aa.indexOf('*');
+  m.prot = stop >= 0 ? aa.slice(0, stop) : aa;
+  m.stopCodon = stop >= 0 ? stop + 1 : 0;
+  let same = 0;
+  while (same < m.prot.length && same < d.prot.length && m.prot[same] === d.prot[same]) same++;
+  m.same = same;
+
+  if (intronic) m.note.push(intronic + ' lesion(s) entierement dans un intron : sans effet sur le CDS episse.');
+  if (!m.lesions) m.note.push('aucune lesion ne touche les exons.');
+  if (boundary) m.warn.push('la lesion recouvre une borne d exon : l epissage reel peut differer de ce calcul.');
+  if (unknown) m.note.push('sequence inseree ou substituee non fournie : les residus concernes sont notes X (donnez-la, par ex. "ins 925 GATTACA").');
+  const decl = gene.truncs.find(t => t.name === allele.name);
+  if (decl && decl.aa > 0 && decl.aa !== m.prot.length)
+    m.warn.push('la ligne "trunc ' + allele.name + ' ' + decl.aa + '" annonce ' + decl.aa + ' aa, la traduction en donne ' + m.prot.length + '.');
+  return m;
+}
+
+function mutantSummary(d, m) {
+  const bits = [];
+  bits.push('CDS ' + d.cds.length + ' -> ' + m.cds.length + ' nt ('
+            + (m.delta >= 0 ? '+' : '') + m.delta + ')');
+  bits.push(m.shift ? 'decalage du cadre (+' + m.shift + ')' : 'cadre conserve');
+  bits.push('proteine ' + m.prot.length + ' aa');
+  if (m.stopCodon && m.stopCodon <= d.prot.length) bits.push('stop au codon ' + m.stopCodon);
+  else if (!m.stopCodon) bits.push('pas de codon stop');
+  if (m.same < m.prot.length || m.prot.length !== d.prot.length)
+    bits.push('identique a la sauvage jusqu au residu ' + m.same);
+  return bits.join(' | ');
+}
+
+// ---- rendering: 60 per line, numbered, runs grouped into spans ------------
+function seqHTML(seq, role, per) {
+  if (!seq) return '';
+  const lines = [];
+  for (let i = 0; i < seq.length; i += per) {
+    const chunk = seq.slice(i, i + per);
+    let body = '';
+    if (role) {
+      let j = 0;
+      while (j < chunk.length) {
+        let k = j;
+        while (k < chunk.length && role[i + k] === role[i + j]) k++;
+        body += '<span class="s-' + role[i + j] + '">' + chunk.slice(j, k) + '</span>';
+        j = k;
+      }
+    } else body = chunk;
+    lines.push('<span class="num">' + (i + 1) + '</span>' + body);
+  }
+  return lines.join('\n');
+}
+const wrap60 = (x) => (x.match(/.{1,60}/g) || []).join('\n');
+
+// ---------------------------------------------------------------
+// 8. SEQUENCE PANEL WIRING
+// ---------------------------------------------------------------
+const $seq = document.getElementById('seq');
+const $which = document.getElementById('whichgene');
+let SEQ = {};   // gene name -> the derived sequences, for the copy buttons
+let MUT = {};   // gene name -> allele name -> its mutant protein
+
+function refreshSeq() {
+  const genes = currentModel().genes.filter(g => g.len > 0);
+  const recs = parseFasta($seq.value);
+  const bound = bindSequences(genes, recs);
+
+  // keep the chosen gene selected across re-renders
+  const prev = $which.value;
+  $which.innerHTML = genes.map(g => '<option>' + esc(g.name) + '</option>').join('');
+  if (genes.some(g => g.name === prev)) $which.value = prev;
+
+  SEQ = {};
+  const info = [];
+  for (const g of genes) {
+    const r = bound[g.name];
+    if (!r) { info.push(g.name + ' : pas de sequence'); continue; }
+    SEQ[g.name] = sequenceOf(g, r.seq);
+    info.push(g.name + ' : ' + r.seq.length + ' nt' + (r.name ? ' (>' + r.name + ')' : ''));
+  }
+  document.getElementById('seqinfo').textContent =
+    recs.length ? info.join(' | ') : 'Collez ici la sequence genomique du gene, du premier au dernier nucleotide, dans le meme repere que les coordonnees ci-dessus.';
+
+  const d = SEQ[$which.value];
+  const put = (id, html, len) => {
+    document.getElementById(id).innerHTML = html;
+    document.getElementById(id + 'len').textContent = len;
+  };
+  if (!d) {
+    put('gen', '', ''); put('cds', '', ''); put('prot', '', '');
+    document.getElementById('seqwarn').textContent = '';
+    document.getElementById('alleles').innerHTML = '';
+    MUT = {};
+    document.getElementById('wtrunc').disabled = true;
+    return;
+  }
+  // introns in lowercase, the way a genome browser shows them
+  const shown = d.seq.split('').map((c, i) => d.role[i] === 'in' ? c.toLowerCase() : c).join('');
+  put('gen', seqHTML(shown, d.role, 60), '(' + d.seq.length + ' nt)');
+  put('cds', seqHTML(d.cds, null, 60), '(' + d.cds.length + ' nt)');
+  put('prot', seqHTML(d.prot, d.prot.split('').map(c => c === '*' ? 'stop' : 'aa'), 60),
+      '(' + d.prot.length + ' aa)');
+  document.getElementById('seqwarn').innerHTML =
+    (d.source ? esc(d.source) + '. ' : '')
+    + (d.warn.length ? '<span class="bad">' + esc(d.warn.join(' ')) + '</span>' : '');
+
+  // ---- what each allele does to that protein ----
+  // computed for every gene that has a sequence, so the trunc lines can be
+  // written for all of them at once; only the selected one is displayed
+  MUT = {};
+  for (const g of genes) {
+    const gd = SEQ[g.name];
+    if (!gd || !gd.cds || !g.alleles.length) continue;
+    MUT[g.name] = {};
+    for (const a of g.alleles) MUT[g.name][a.name] = mutantOf(g, gd, a);
+  }
+  document.getElementById('wtrunc').disabled =
+    !Object.keys(SEQ).some(k => SEQ[k] && SEQ[k].prot);
+
+  const gene = genes.find(g => g.name === $which.value);
+  const out = [];
+  if (gene && gene.alleles.length && MUT[gene.name]) {
+    out.push('<h2>Effet des alleles sur la proteine</h2>');
+    out.push('<p class="asum">Les lesions sont appliquees au CDS episse : on suppose que'
+           + ' les introns restants sont episses comme chez le sauvage.</p>');
+    for (const a of gene.alleles) {
+      const m = MUT[gene.name][a.name];
+      const roles = m.prot.split('').map((c, i) => c === 'X' ? 'unk' : (i < m.same ? 'aa' : 'mut'));
+      out.push('<div class="seqbox allele">'
+        + '<h3>' + esc(a.name) + ' (' + m.prot.length + ' aa)'
+        + '<button class="mini" data-allele="' + esc(a.name) + '" data-part="prot">Copier</button></h3>'
+        + '<p class="asum">' + esc(mutantSummary(d, m)) + '</p>'
+        + (m.warn.length ? '<p class="asum"><span class="bad">' + esc(m.warn.join(' ')) + '</span></p>' : '')
+        + (m.note.length ? '<p class="asum">' + esc(m.note.join(' ')) + '</p>' : '')
+        + '<pre>' + seqHTML(m.prot, roles, 60) + '</pre>'
+        + '<details class="aseq"><summary>Sequences nucleotidiques de l allele</summary>'
+        + '<h4>Gene mutant, introns compris (' + m.gseq.length + ' nt)'
+        + '<button class="mini" data-allele="' + esc(a.name) + '" data-part="gene">Copier</button></h4>'
+        + '<pre>' + seqHTML(m.gseq, m.gRole, 60) + '</pre>'
+        + '<h4>CDS mutant (' + m.cds.length + ' nt)'
+        + '<button class="mini" data-allele="' + esc(a.name) + '" data-part="cds">Copier</button></h4>'
+        + '<pre>' + seqHTML(m.cds, m.cdsRole, 60) + '</pre>'
+        + '</details></div>');
+    }
+  }
+  document.getElementById('alleles').innerHTML = out.join('');
+}
+
+function copyOut(text) {
+  if (!text) return;
+  if (navigator.clipboard) { navigator.clipboard.writeText(text).catch(() => fallbackCopy(text)); }
+  else fallbackCopy(text);
+}
+function fallbackCopy(text) {   // file:// pages do not always get the async API
+  const t = document.createElement('textarea');
+  t.value = text; document.body.appendChild(t); t.select();
+  try { document.execCommand('copy'); } catch (_) {}
+  document.body.removeChild(t);
+}
+
+document.querySelectorAll('button[data-copy]').forEach(b => {
+  b.addEventListener('click', () => {
+    const d = SEQ[$which.value];
+    if (!d) return;
+    const which = b.getAttribute('data-copy');
+    copyOut(wrap60(which === 'gen' ? d.seq : which === 'cds' ? d.cds : d.prot));
+    const was = b.textContent;
+    b.textContent = 'Copie';
+    setTimeout(() => { b.textContent = was; }, 900);
+  });
+});
+
+document.getElementById('alleles').addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('button[data-allele]');
+  if (!b) return;
+  const m = (MUT[$which.value] || {})[b.getAttribute('data-allele')];
+  if (!m) return;
+  const part = b.getAttribute('data-part');
+  copyOut(wrap60(part === 'prot' ? m.prot : part === 'cds' ? m.cds : m.gseq));
+  const was = b.textContent;
+  b.textContent = 'Copie';
+  setTimeout(() => { b.textContent = was; }, 900);
+});
+
+// Writes what the translation found back into the block of the gene it
+// belongs to: "protein <aa>" for the wild type, then
+// "trunc <allele> <aa> <premier residu modifie>" for each allele. A trunc line
+// whose allele has no lesion is left exactly as it was.
+function writeTruncs() {
+  const isGene = (l) => /^\s*gene\s+/i.test(l);
+  const lines = $spec.value.split('\n');
+  let written = 0;
+
+  for (const gname of Object.keys(SEQ)) {
+    const d = SEQ[gname];
+    if (!d || !d.prot) continue;
+    const alleles = Object.keys(MUT[gname] || {});
+
+    let start = -1;
+    for (let i = 0; i < lines.length; i++)
+      if (isGene(lines[i]) && lines[i].trim().split(/\s+/)[1] === gname) { start = i; break; }
+    if (start < 0) continue;
+    let end = lines.length;
+    for (let i = start + 1; i < lines.length; i++) if (isGene(lines[i])) { end = i; break; }
+
+    const body = [];
+    let hasProtein = false;
+    for (let i = start; i < end; i++) {
+      const q = lines[i].trim().split(/\s+/);
+      if (q[0] && q[0].toLowerCase() === 'trunc' && alleles.indexOf(q[1]) >= 0) continue;
+      if (q[0] && q[0].toLowerCase() === 'protein') {   // updated in place
+        if (hasProtein) continue;                       // a duplicate, drop it
+        hasProtein = true;
+        if (lines[i].trim() !== 'protein ' + d.prot.length) written++;
+        body.push('protein ' + d.prot.length);
+        continue;
+      }
+      body.push(lines[i]);
+    }
+    // land above the blank lines and the nudge block, not after them
+    let at = body.length;
+    while (at > 0 && (!body[at - 1].trim() || /^\s*(#|nudge\b)/i.test(body[at - 1]))) at--;
+
+    const add = [];
+    if (!hasProtein) { add.push('protein ' + d.prot.length); written++; }
+    for (const a of alleles) {
+      const m = MUT[gname][a];
+      if (!m.prot.length) continue;
+      const from = m.same + 1;
+      add.push('trunc ' + a + ' ' + m.prot.length + (from <= m.prot.length ? ' ' + from : ''));
+      written++;
+    }
+    body.splice(at, 0, ...add);
+    lines.splice(start, end - start, ...body);
+  }
+
+  $spec.value = lines.join('\n');
+  refresh();
+  return written;
+}
+
+document.getElementById('wtrunc').addEventListener('click', (e) => {
+  const written = writeTruncs();
+  const b = e.currentTarget, was = 'Ecrire protein et trunc';
+  b.textContent = written + ' ligne' + (written > 1 ? 's' : '') + ' ecrite' + (written > 1 ? 's' : '');
+  setTimeout(() => { b.textContent = was; }, 1400);
+});
+
+document.getElementById('fasta').addEventListener('click', () => {
+  const g = $which.value, d = SEQ[g];
+  if (!d) return;
+  let txt = '>' + g + '_genomique\n' + wrap60(d.seq)
+          + '\n>' + g + '_CDS\n' + wrap60(d.cds)
+          + '\n>' + g + '_proteine\n' + wrap60(d.prot) + '\n';
+  const muts = MUT[g] || {};
+  for (const name of Object.keys(muts)) {
+    const m = muts[name];
+    txt += '>' + name + '_gene ' + m.gseq.length + 'nt\n' + wrap60(m.gseq) + '\n'
+         + '>' + name + '_CDS ' + m.cds.length + 'nt\n' + wrap60(m.cds) + '\n'
+         + '>' + name + '_proteine ' + m.prot.length + 'aa\n' + wrap60(m.prot) + '\n';
+  }
+  const url = URL.createObjectURL(new Blob([txt], { type: 'text/plain' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = g + '.fasta'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+$seq.addEventListener('input', refreshSeq);
+$which.addEventListener('change', refreshSeq);
+
+// ---------------------------------------------------------------
+// 9. PROJECT FILE -- the coordinates and the sequences in one .txt
+// ---------------------------------------------------------------
+// The .htm cannot save itself: a page opened from a file:// path is not
+// allowed to write back to it. So the whole state travels as a small text
+// file, which also lets several versions of a figure live side by side.
+const MARK_C = '#=== COORDONNEES ===';
+const MARK_S = '#=== SEQUENCES ===';
+
+function projectText() {
+  return MARK_C + '\n' + $spec.value.replace(/\s+$/, '')
+       + '\n\n' + MARK_S + '\n' + $seq.value.replace(/\s+$/, '') + '\n';
+}
+
+let lastSaved = '';                 // the project as it was saved or opened
+let savedAt = '';
+
+function showDirty() {
+  const el = document.getElementById('dirty');
+  if (!el) return;
+  if (projectText() === lastSaved) {
+    el.className = '';
+    el.textContent = savedAt ? 'Projet enregistre a ' + savedAt + '.' : '';
+  } else {
+    el.className = 'unsaved';
+    el.textContent = 'Modifications non enregistrees : le fichier .htm ne les garde pas.';
+  }
+}
+
+document.getElementById('save').addEventListener('click', () => {
+  const txt = projectText();
+  const first = (parseSpec($spec.value).genes[0] || {}).name || 'alleles';
+  const url = URL.createObjectURL(new Blob([txt], { type: 'text/plain;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = String(first).replace(/[^\w.-]+/g, '_') + '.txt'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  lastSaved = txt;
+  savedAt = new Date().toTimeString().slice(0, 5);
+  showDirty();
+});
+
+document.getElementById('open').addEventListener('click', () => {
+  if (projectText() !== lastSaved &&
+      !confirm('Les modifications en cours seront remplacees. Continuer ?')) return;
+  document.getElementById('openfile').click();
+});
+
+document.getElementById('openfile').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';                 // so the same file can be reopened
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = () => loadProject(String(r.result));
+  r.readAsText(file);
+});
+
+// a file without the markers is taken as coordinates only, so a plain spec
+// pasted into a text file still opens
+function loadProject(txt) {
+  const lines = txt.replace(/\r\n?/g, '\n').split('\n');
+  let cut = -1;
+  for (let i = 0; i < lines.length; i++)
+    if (/^#===\s*SEQUENCES/i.test(lines[i])) { cut = i; break; }
+  const specPart = (cut < 0 ? lines : lines.slice(0, cut)).join('\n');
+  const seqPart  = cut < 0 ? '' : lines.slice(cut + 1).join('\n');
+
+  $spec.value = specPart.replace(/^#===\s*COORDONNEES.*$/im, '').replace(/^\n+/, '')
+                        .replace(/\s+$/, '') + '\n';
+  $seq.value = seqPart.replace(/^\n+/, '').replace(/\s+$/, '');
+  delete $shared.dataset.touched;      // the "scale" line of the loaded file decides
+  refresh();
+  lastSaved = projectText();
+  savedAt = '';
+  showDirty();
+}
+
+$spec.addEventListener('input', refresh);
+$seq.addEventListener('input', showDirty);
+$shared.addEventListener('change', () => { $shared.dataset.touched = '1'; refresh(); });
+refresh();
+lastSaved = projectText();             // the page starts on its built-in example
+showDirty();
+</script>
+
+</body></html>
