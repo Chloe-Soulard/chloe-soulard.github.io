@@ -3,7 +3,7 @@ title: "Efficient and heritable gene editing through CRISPR-Cas9 in <i>Pisum sat
 collection: publications
 category: manuscripts
 permalink: /publication/2025-crispr-cas9-pisum-sativum
-excerpt: 'We developed an embryonic axis transformation and gene-editing protocol for pea (<i>Pisum sativum</i>), with very high editing efficiency.'
+excerpt: 'We developed an embryonic axis transformation and gene-editing protocol for pea (<i>Pisum sativum</i>), with very high editing efficiency. The most important parts of this protocol are the grafting (quick, with no root regeneration in vitro) and the use of DsRed (better than antibiotics for unevenly transformed plants).'
 date: 2025-06-01
 order: 1
 venue: 'Plant Biotechnology Journal'
