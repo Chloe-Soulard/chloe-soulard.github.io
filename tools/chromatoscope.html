@@ -233,6 +233,7 @@ input[type=range]{width:88px;accent-color:var(--accent)}
 
     <div class="spacer"></div>
     <button class="btn" id="resetoff">Reset offsets</button>
+    <button class="btn" id="clear" title="Remove all traces and text rows">Clear</button>
     <button class="btn" id="png" title="Export the current view as PNG">PNG</button>
     <button class="btn sq" id="theme" title="Toggle theme">◐</button>
   </header>
@@ -1370,6 +1371,24 @@ $('#lh').addEventListener('input',  e => { state.laneH = +e.target.value; render
 $('#resetoff').onclick = () => {
   for (const r of state.rows) if (!r.locked) r.offset = 0;
   refreshRails(); render();
+};
+
+/* back to the empty page, keeping only the display settings */
+const HINT = $('#hint').innerHTML;   // the load errors may have replaced it
+$('#clear').onclick = () => {
+  if (!state.rows.length) return;
+  if (!confirm('Remove all traces and text rows?')) return;
+  for (const r of state.rows) r.el.remove();
+  state.rows = [];
+  state.refId = state.activeId = null;
+  state.caret = {id: null, col: 0};
+  state.query = ''; $('#q').value = '';
+  runSearch();
+  $('#hint').innerHTML = HINT;
+  $('#empty').classList.remove('hidden');
+  view.pxpb = 12; view.left = -6;
+  $('#zval').textContent = view.pxpb.toFixed(1);
+  render();
 };
 
 $('#addnote').onclick = () => {
