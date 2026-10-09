@@ -37,3 +37,22 @@
     "layout/sidebar",
     "layout/json_cv"
 ;
+/* Tools page: a small tutorial video beside the tool's description,
+   full width on narrow screens */
+.tool-video {
+  float: right;
+  width: 340px;
+  max-width: 45%;
+  margin: 0.2em 0 1em 1.5em;
+
+  iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 4px; }
+  figcaption { margin-top: 0.3em; font-size: 0.75em; text-align: center; color: var(--global-text-color-light); }
+
+  @media (max-width: 600px) {
+    float: none;
+    width: 100%;
+    max-width: 100%;
+    margin: 0.5em 0 1em;
+  }
+}
+.tool-end { clear: both; }
