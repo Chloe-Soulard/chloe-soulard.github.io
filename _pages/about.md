@@ -29,14 +29,24 @@ Skills
 **Molecular biology**
 
 - GoldenBraid cloning
-- CRISPR-Cas9 genome editing
-- Pea genetic transformation (embryonic axes)
+- CRISPR-Cas9 genome editing (from guide design to a characterized edited line)
+- Stable transformation of *Pisum sativum*
+- Transient and stable transformation of *Physcomitrium patens* (protoplasts)
 - DNA extraction, PCR and Sanger sequencing
 
 **Bioinformatics**
 
+- Nanopore long-read sequencing analysis
 - Variant analysis
 - 16S rRNA sequencing analysis
-- Nanopore long-read sequencing analysis
-- CRISPR guide design and off-target prediction
-- Python (Biopython) and BLAST
+
+**Informatics**
+
+- Python, R, HTML and Bash
+- Snakemake for pipelines
+- Database structure (the basics, but enough for something simple!)
+- Data analysis (the basics too, from linear regression and PCA to machine learning)
+
+**Analytical chemistry**
+
+- Strigolactone extraction from exudates and tissues (concentration and chromatography before LC-MS/MS)
