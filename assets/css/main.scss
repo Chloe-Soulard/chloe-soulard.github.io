@@ -62,4 +62,4 @@
 .tool-end { clear: both; }
 
 /* the outlined buttons were too pale to read next to the filled ones */
-.page__content .btn--inverse { color: var(--global-text-color) !important; }
+.archive .btn--inverse:not(:hover), .page__content .btn--inverse:not(:hover) { color: var(--global-text-color) !important; }
