@@ -17,6 +17,7 @@ Education
   * IJPB (INRAE, Versailles) and Plant Health Laboratory (ANSES)
   * Supervisors: Fabien Nogué, Alexandre de Saint Germain and Julie Mallet
 * **Engineering degree**, Université de Technologie de Compiègne (UTC), from 2017
+  * HuTech (Humanities and Technology) programme, an engineering track that gives a large place to the humanities and social sciences, such as philosophy, history of science, logic and design methodology
   * Exchange semester (6 months) at Technische Universität Braunschweig, Germany
 
 Research experience

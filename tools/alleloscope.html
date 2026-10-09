@@ -82,12 +82,21 @@
   button.mini { margin: 0; width: auto; height: 30px; padding: 0 10px; font-size: 12.5px; }
   .seqbox { margin-top: 14px; }
   .seqbox h3 { font-size: 13px; font-weight: 500; margin: 0 0 4px; color: var(--ink-soft); }
-  .seqbox pre {
-    margin: 0; padding: 8px 10px; max-height: 260px; overflow: auto;
+  /* The numbering sits in its own column, outside the text box: selecting the
+     sequence to copy it can no longer pick the line numbers up along the way. */
+  .seqview {
+    display: flex; align-items: flex-start; max-height: 260px; overflow: auto;
     border: 1px solid var(--rule); border-radius: 6px; background: var(--panel);
-    font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace; white-space: pre;
+    font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace;
   }
-  .seqbox .num { display: inline-block; width: 5em; padding-right: 1em; text-align: right; color: var(--ink-soft); }
+  .seqview pre { margin: 0; white-space: pre; font: inherit; }
+  .seqview .gutter {
+    padding: 8px 10px 8px 8px; text-align: right; color: var(--ink-soft);
+    background: var(--panel); border-right: 1px solid var(--rule);
+    position: sticky; left: 0; flex: 0 0 auto;
+    user-select: none; -webkit-user-select: none; -moz-user-select: none;
+  }
+  .seqview .seqbody { padding: 8px 10px; flex: 1 1 auto; }
   .s-in  { color: var(--ink-soft); }
   .s-utr { background: #e8f1fb; color: var(--exon-line); }
   .s-cds { background: var(--exon-fill); color: #0d3f70; font-weight: 700; }
@@ -102,12 +111,11 @@
   .aseq summary { color: var(--ink-soft); font-size: 12.5px; }
   .aseq h4 { display: flex; align-items: center; gap: 10px;
              font-size: 12.5px; font-weight: 500; margin: 10px 0 4px; color: var(--ink-soft); }
-  .aseq pre { margin: 0; padding: 8px 10px; max-height: 220px; overflow: auto;
-              border: 1px solid var(--rule); border-radius: 6px; background: var(--panel);
-              font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace; white-space: pre; }
-  .aseq .num { display: inline-block; width: 5em; padding-right: 1em; text-align: right; color: var(--ink-soft); }
+  .aseq .seqview { max-height: 220px; }
   .legend { font-size: 12px; color: var(--ink-soft); margin: 8px 0 0; }
   .legend span { padding: 1px 5px; border-radius: 3px; }
+  .credit { margin: 26px 0 8px; font-size: 10px; font-style: italic;
+            color: var(--ink-soft); opacity: .55; }
 </style>
 </head>
 <body>
@@ -266,9 +274,9 @@ TCTTTTCGTTTATAGCAGGG</textarea>
         <button class="mini" id="wtrunc" disabled>Write protein and trunc lines</button>
       </div>
       <p id="seqwarn"></p>
-      <div class="seqbox"><h3>Genomic <span id="genlen"></span></h3><pre id="gen"></pre></div>
-      <div class="seqbox"><h3>CDS, spliced exons <span id="cdslen"></span></h3><pre id="cds"></pre></div>
-      <div class="seqbox"><h3>Protein <span id="protlen"></span></h3><pre id="prot"></pre></div>
+      <div class="seqbox"><h3>Genomic <span id="genlen"></span></h3><div id="gen" class="seqview"></div></div>
+      <div class="seqbox"><h3>CDS, spliced exons <span id="cdslen"></span></h3><div id="cds" class="seqview"></div></div>
+      <div class="seqbox"><h3>Protein <span id="protlen"></span></h3><div id="prot" class="seqview"></div></div>
       <div id="alleles"></div>
       <p class="legend">
         <span class="s-cds">exon = CDS</span>
@@ -1188,7 +1196,7 @@ function mutantSummary(d, m) {
 // ---- rendering: 60 per line, numbered, runs grouped into spans ------------
 function seqHTML(seq, role, per) {
   if (!seq) return '';
-  const lines = [];
+  const nums = [], rows = [];
   for (let i = 0; i < seq.length; i += per) {
     const chunk = seq.slice(i, i + per);
     let body = '';
@@ -1201,9 +1209,13 @@ function seqHTML(seq, role, per) {
         j = k;
       }
     } else body = chunk;
-    lines.push('<span class="num">' + (i + 1) + '</span>' + body);
+    nums.push(i + 1);
+    rows.push(body);
   }
-  return lines.join('\n');
+  // two aligned columns rather than one: same font and line height, so row k of
+  // the gutter always faces row k of the sequence.
+  return '<pre class="gutter" aria-hidden="true">' + nums.join('\n') + '</pre>'
+       + '<pre class="seqbody">' + rows.join('\n') + '</pre>';
 }
 const wrap60 = (x) => (x.match(/.{1,60}/g) || []).join('\n');
 
@@ -1291,14 +1303,14 @@ function refreshSeq() {
         + '<p class="asum">' + esc(mutantSummary(d, m)) + '</p>'
         + (m.warn.length ? '<p class="asum"><span class="bad">' + esc(m.warn.join(' ')) + '</span></p>' : '')
         + (m.note.length ? '<p class="asum">' + esc(m.note.join(' ')) + '</p>' : '')
-        + '<pre>' + seqHTML(m.prot, roles, 60) + '</pre>'
+        + '<div class="seqview">' + seqHTML(m.prot, roles, 60) + '</div>'
         + '<details class="aseq"><summary>Nucleotide sequences of the allele</summary>'
         + '<h4>Mutant gene, introns included (' + m.gseq.length + ' nt)'
         + '<button class="mini" data-allele="' + esc(a.name) + '" data-part="gene">Copy</button></h4>'
-        + '<pre>' + seqHTML(m.gseq, m.gRole, 60) + '</pre>'
+        + '<div class="seqview">' + seqHTML(m.gseq, m.gRole, 60) + '</div>'
         + '<h4>Mutant CDS (' + m.cds.length + ' nt)'
         + '<button class="mini" data-allele="' + esc(a.name) + '" data-part="cds">Copy</button></h4>'
-        + '<pre>' + seqHTML(m.cds, m.cdsRole, 60) + '</pre>'
+        + '<div class="seqview">' + seqHTML(m.cds, m.cdsRole, 60) + '</div>'
         + '</details></div>');
     }
   }
@@ -1513,4 +1525,5 @@ lastSaved = projectText();             // the page starts on its built-in exampl
 showDirty();
 </script>
 
+<p class="credit">developed by chloé soulard with Claude — feel free to share!</p>
 </body></html>
