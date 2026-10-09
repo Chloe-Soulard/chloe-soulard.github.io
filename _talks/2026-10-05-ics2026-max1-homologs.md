@@ -1,5 +1,5 @@
 ---
-title: "Gene editing of the strigolactone biosynthetic pathway in <i>Pisum sativum</i> sheds light on the role of two MAX1 homologs"
+title: "Gene editing of the strigolactone biosynthetic pathway in <i>Pisum sativum</i> sheds light on the role of two MAX1 homologs (and other genes in the non-canonical SL pathway)"
 collection: talks
 type: "Talk"
 permalink: /talks/2026-10-05-ics2026-max1-homologs
