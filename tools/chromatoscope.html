@@ -76,6 +76,8 @@ button,input,select{font:inherit;color:inherit}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:500}
 .btn.sq{padding:4px 8px;min-width:26px;justify-content:center;font-variant-numeric:tabular-nums}
 .btn[disabled]{opacity:.4;cursor:default}
+.btn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.cutting .lane:not(.textrow) canvas{cursor:crosshair}
 
 .qin{
   border:1px solid var(--line2); background:var(--lane); border-radius:5px;
@@ -230,6 +232,7 @@ input[type=range]{width:88px;accent-color:var(--accent)}
 
     <div class="sep"></div>
     <button class="btn" id="addnote" title="Insert a text row below the active row">+ text row</button>
+    <button class="btn" id="cutbtn" title="Scissors: click a trace to cut it into two pieces that slide on their own; click a cut to rejoin it (Esc to stop)">✂ Cut</button>
     <button class="btn" id="pastenote" title="Paste a sequence from the clipboard as a new text row (or press Ctrl+V on the page)">Paste as text row</button>
 
     <div class="spacer"></div>
@@ -271,6 +274,7 @@ input[type=range]{width:88px;accent-color:var(--accent)}
     <span>Cursor <b id="pos">—</b></span>
     <span id="hint">
       Drag a row to slide it · drag its rail to reorder · on a text row, click a cell then type · <kbd>Ctrl</kbd>+<kbd>V</kbd> on the page pastes a new text row ·
+      ✂ Cut, then click a trace to split it — each piece then drags on its own ·
       <kbd>wheel</kbd> scrolls · <kbd>Ctrl</kbd>+<kbd>wheel</kbd> zooms ·
       <kbd>←</kbd><kbd>→</kbd> shift the active row · <kbd>Alt</kbd>+<kbd>↑</kbd><kbd>↓</kbd> move it ·
       <kbd>double-click</kbd> resets
@@ -412,10 +416,74 @@ function buildTrack(p){
     name: p.name, fileName: p.fileName,
     ch: p.ch, ploc, seq: p.seq, n, ns, sampleBase, norm,
     offset: 0, locked: false, matches: [],
+    cuts: [], shifts: [0],
     el: null, canvas: null, ctx: null, cssW: 0, cssH: 0
   };
 }
 buildTrack.n = 0;
+
+/* ---- cuts: a trace split into pieces that slide on their own ----
+   t.cuts holds the first base of every piece but the first (sorted),
+   t.shifts the extra offset of each piece on top of t.offset. */
+function segIndex(t, i){
+  let k = 0;
+  while (k < t.cuts.length && i >= t.cuts[k]) k++;
+  return k;
+}
+function segBounds(t, k){ return [k ? t.cuts[k - 1] : 0, k < t.cuts.length ? t.cuts[k] : t.n]; }
+const basePos = (t, i) => i + t.offset + t.shifts[segIndex(t, i)];
+
+/** the piece under screen x; where pieces overlap, the one drawn last wins */
+function segAtX(t, x){
+  const b = xToBase(x);
+  let best = 0, bestD = Infinity;
+  for (let k = 0; k <= t.cuts.length; k++){
+    const [a, z] = segBounds(t, k), o = t.offset + t.shifts[k];
+    const lo = a - 0.5 + o, hi = z - 0.5 + o;
+    const d = b < lo ? lo - b : b > hi ? b - hi : 0;
+    if (d <= bestD){ best = k; bestD = d; }
+  }
+  return best;
+}
+
+/** the two screen positions of cut j: end of the left piece, start of the right one */
+function cutXs(t, j){
+  const b = t.cuts[j] - 0.5 + t.offset;
+  return [baseToX(b + t.shifts[j]), baseToX(b + t.shifts[j + 1])];
+}
+
+/** where a click at x would cut: {k: piece, c: first base of the new piece} */
+function cutTarget(t, x){
+  const k = segAtX(t, x);
+  const c = Math.round(xToBase(x) - t.offset - t.shifts[k] + 0.5);
+  const [a, z] = segBounds(t, k);
+  return c > a && c < z ? {k, c} : null;
+}
+
+/** a cut marker within reach of x, or -1 (a click snaps to the nearest
+ *  boundary, so the reach covers half a base at least) */
+function cutNear(t, x){
+  const reach = Math.max(6, view.pxpb * 0.6);
+  for (let j = 0; j < t.cuts.length; j++)
+    if (cutXs(t, j).some(cx => Math.abs(cx - x) < reach)) return j;
+  return -1;
+}
+
+/** click in cut mode: on a cut it rejoins the pieces, elsewhere it cuts */
+function toggleCut(t, x){
+  const j = cutNear(t, x);
+  if (j >= 0){
+    t.cuts.splice(j, 1);
+    t.shifts.splice(j + 1, 1);    // the joined piece keeps the left one's place
+  } else {
+    const hit = cutTarget(t, x);
+    if (!hit) return;
+    t.cuts.splice(hit.k, 0, hit.c);
+    t.shifts.splice(hit.k + 1, 0, t.shifts[hit.k]);
+  }
+  state.cutHover = null;
+  render();
+}
 
 /** sample index for a given base coordinate (binary search) */
 function sampleAt(t, base){
@@ -440,6 +508,8 @@ const state = {
   refId: null,
   activeId: null,
   caret: {id: null, col: 0},
+  cutMode: false,
+  cutHover: null,     // {id, x}: where the scissors would cut
   query: '',
   matchList: [],
   matchIdx: -1,
@@ -473,8 +543,9 @@ function extent(){
   let lo = Infinity, hi = -Infinity;
   for (const r of state.rows){
     const len = r.kind === 'trace' ? r.n : r.text.length;
-    lo = Math.min(lo, r.offset);
-    hi = Math.max(hi, r.offset + len);
+    const sh = r.kind === 'trace' ? r.shifts : [0];
+    lo = Math.min(lo, r.offset + Math.min(...sh));
+    hi = Math.max(hi, r.offset + len + Math.max(...sh));
   }
   if (lo === Infinity) return {min: -10, max: 120};
   return {min: lo - 12, max: hi + 12};
@@ -586,12 +657,36 @@ function drawTrack(t){
   const baseY   = h - letterH;
   const plotH   = Math.max(8, baseY - padTop);
 
-  // visible bounds, in the track's own coordinates
-  const b0 = view.left - t.offset;
-  const b1 = view.left + w / view.pxpb - t.offset;
+  drawGrid(ctx, t, w, baseY, view.left - t.offset, view.left + w / view.pxpb - t.offset);
 
-  drawGrid(ctx, t, w, baseY, b0, b1);
-  drawMatches(ctx, t, h, baseY);
+  // every piece of a cut trace is drawn with its own offset, clipped to its own bases
+  for (let k = 0; k <= t.cuts.length; k++){
+    const o = t.offset + t.shifts[k];
+    const [a, z] = segBounds(t, k);
+    const xa = k ? Math.max(0, baseToX(a - 0.5 + o)) : 0;
+    const xz = k < t.cuts.length ? Math.min(w, baseToX(z - 0.5 + o)) : w;
+    if (xz <= xa) continue;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(xa, 0, xz - xa, h); ctx.clip();
+    drawPiece(ctx, t, o, a, z, w, h, letterH, baseY, plotH);
+    ctx.restore();
+  }
+
+  // ---- baseline ----
+  ctx.strokeStyle = COL.line; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, baseY + 0.5); ctx.lineTo(w, baseY + 0.5); ctx.stroke();
+
+  drawCuts(ctx, t, h);
+}
+
+/** one piece of a track: bases a..z-1, drawn with offset o */
+function drawPiece(ctx, t, o, a, z, w, h, letterH, baseY, plotH){
+  // visible bounds, in the track's own coordinates
+  // (the signal before the first base and after the last stays visible)
+  const b0 = a ? Math.max(a - 1, view.left - o) : view.left - o;
+  const b1 = z < t.n ? Math.min(z, view.left + w / view.pxpb - o) : view.left + w / view.pxpb - o;
+
+  drawMatches(ctx, t, h, baseY, o);
 
   // ---- the 4 channels ----
   ctx.save();
@@ -609,7 +704,7 @@ function drawTrack(t){
     ctx.beginPath();
     let started = false;
     for (let s = s0; s <= s1; s += step){
-      const x = (t.sampleBase[s] + t.offset - view.left) * view.pxpb;
+      const x = (t.sampleBase[s] + o - view.left) * view.pxpb;
       const y = baseY - arr[s] * scale;
       if (started) ctx.lineTo(x, y);
       else { ctx.moveTo(x, y); started = true; }
@@ -618,13 +713,9 @@ function drawTrack(t){
   }
   ctx.restore();
 
-  // ---- baseline ----
-  ctx.strokeStyle = COL.line; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, baseY + 0.5); ctx.lineTo(w, baseY + 0.5); ctx.stroke();
-
   // ---- called bases (PBAS as-is, Ns included) ----
-  const i0 = Math.max(0, Math.floor(b0) - 1);
-  const i1 = Math.min(t.n - 1, Math.ceil(b1) + 1);
+  const i0 = Math.max(a, Math.floor(b0) - 1);
+  const i1 = Math.min(z - 1, Math.ceil(b1) + 1);
 
   if (view.pxpb >= 6){
     ctx.font = '500 ' + Math.min(letterH - 2, Math.max(7, view.pxpb * 0.95)) + 'px ' + MONO;
@@ -632,17 +723,44 @@ function drawTrack(t){
     for (let i = i0; i <= i1; i++){
       const c = t.seq[i] || 'N';
       ctx.fillStyle = COL.base[c] || COL.base.N;
-      ctx.fillText(c, baseToX(i + t.offset), baseY + letterH / 2 + 1);
+      ctx.fillText(c, baseToX(i + o), baseY + letterH / 2 + 1);
     }
   } else {
     const tickH = Math.max(3, letterH - 6);
     for (let i = i0; i <= i1; i++){
       const c = t.seq[i] || 'N';
       ctx.fillStyle = COL.base[c] || COL.base.N;
-      ctx.fillRect(baseToX(i + t.offset) - Math.max(0.5, view.pxpb * 0.35),
+      ctx.fillRect(baseToX(i + o) - Math.max(0.5, view.pxpb * 0.35),
                    baseY + 3, Math.max(1, view.pxpb * 0.7), tickH);
     }
   }
+}
+
+/** the cut marks, with the size of the gap (or overlap) between the two pieces */
+function drawCuts(ctx, t, h){
+  ctx.save();
+  ctx.strokeStyle = COL.accent; ctx.fillStyle = COL.accent;
+  ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+  ctx.font = '600 10px ' + MONO; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let j = 0; j < t.cuts.length; j++){
+    const [xl, xr] = cutXs(t, j);
+    ctx.beginPath();
+    for (const x of new Set([xl, xr])){ ctx.moveTo(Math.round(x) + 0.5, 0); ctx.lineTo(Math.round(x) + 0.5, h); }
+    ctx.stroke();
+    const gap = Math.round((t.shifts[j + 1] - t.shifts[j]) * 100) / 100;
+    ctx.fillText('✂' + (gap ? ' ' + (gap > 0 ? '+' : '') + gap : ''), (xl + xr) / 2, 2);
+  }
+  // where the scissors would cut, while hovering in cut mode
+  const hv = state.cutHover;
+  if (hv && hv.id === t.id && cutNear(t, hv.x) < 0){
+    const hit = cutTarget(t, hv.x);
+    if (hit){
+      const x = Math.round(baseToX(hit.c - 0.5 + t.offset + t.shifts[hit.k])) + 0.5;
+      ctx.globalAlpha = 0.5; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 function drawGrid(ctx, t, w, baseY, b0, b1){
@@ -657,12 +775,12 @@ function drawGrid(ctx, t, w, baseY, b0, b1){
   ctx.stroke();
 }
 
-function drawMatches(ctx, t, h, baseY){
+function drawMatches(ctx, t, h, baseY, o){
   if (!t.matches.length) return;
   const len = state.query.length;
   const cur = state.matchList[state.matchIdx];
   for (const m of t.matches){
-    const x = baseToX(m + t.offset) - view.pxpb / 2;
+    const x = baseToX(m + o) - view.pxpb / 2;
     const wdt = len * view.pxpb;
     if (x + wdt < -20 || x > t.cssW + 20) continue;
     const isCur = cur && cur.trackId === t.id && cur.pos === m;
@@ -852,22 +970,35 @@ function attachTrackDrag(t){
   const cv = t.canvas;
   let drag = null;
 
+  const localX = e => e.clientX - cv.getBoundingClientRect().left;
+
   cv.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
     setActive(t.id);
+    if (state.cutMode){ if (e.detail < 2) toggleCut(t, localX(e)); return; }
     if (t.locked) return;
-    drag = {x: e.clientX, off0: t.offset, moved: false};
+    // once cut, a drag slides only the piece under the pointer
+    const seg = t.cuts.length ? segAtX(t, localX(e)) : -1;
+    drag = {x: e.clientX, off0: seg < 0 ? t.offset : t.shifts[seg], seg, moved: false};
     cv.setPointerCapture(e.pointerId);
     cv.classList.add('dragging');
   });
 
   cv.addEventListener('pointermove', e => {
-    if (!drag) return;
+    if (!drag){
+      if (state.cutMode){ state.cutHover = {id: t.id, x: localX(e)}; drawTrack(t); }
+      return;
+    }
     const d = (e.clientX - drag.x) / view.pxpb;
     // snap to whole bases; Alt = sub-base adjustment
-    t.offset = e.altKey ? drag.off0 + d : Math.round(drag.off0 + d);
+    const v = e.altKey ? drag.off0 + d : Math.round(drag.off0 + d);
+    if (drag.seg < 0) t.offset = v; else t.shifts[drag.seg] = v;
     if (Math.abs(e.clientX - drag.x) > 2) drag.moved = true;
     refreshRails(); render();
+  });
+
+  cv.addEventListener('pointerleave', () => {
+    if (state.cutHover && state.cutHover.id === t.id){ state.cutHover = null; drawTrack(t); }
   });
 
   const end = e => {
@@ -879,9 +1010,12 @@ function attachTrackDrag(t){
   cv.addEventListener('pointerup', end);
   cv.addEventListener('pointercancel', end);
 
-  cv.addEventListener('dblclick', () => {
-    if (t.locked) return;
-    t.offset = 0; refreshRails(); render();
+  cv.addEventListener('dblclick', e => {
+    if (t.locked || state.cutMode) return;
+    // on a cut trace, a double-click puts that piece back in line
+    if (t.cuts.length) t.shifts[segAtX(t, localX(e))] = 0;
+    else t.offset = 0;
+    refreshRails(); render();
   });
 }
 
@@ -922,7 +1056,7 @@ function gotoMatch(d){
   const m = state.matchList[state.matchIdx];
   const t = rowById(m.trackId);
   if (!t) return;
-  view.left = m.pos + t.offset + state.query.length / 2 - viewportBases() / 2;
+  view.left = basePos(t, m.pos) + state.query.length / 2 - viewportBases() / 2;
   clampView();
   setActive(t.id);
   if (t.el) t.el.scrollIntoView({block: 'nearest'});
@@ -1027,17 +1161,6 @@ function addTextRow(text, offset, afterId, label){
   note.canvas.addEventListener('blur',  drawTextRows);
   note.canvas.addEventListener('keydown', e => onNoteKey(note, e));
 
-  note.canvas.addEventListener('paste', e => {
-    e.preventDefault();
-    const txt = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, '');
-    if (!txt) return;
-    if (state.caret.id !== note.id) state.caret = {id: note.id, col: 0};
-    let col = state.caret.col;
-    for (const c of txt){ col = noteSet(note, col, c); col++; }
-    state.caret.col = col;
-    ensureCaretVisible(note);
-    render();
-  });
 
   row.querySelector('.rowname').addEventListener('input', e => { note.name = e.target.value; });
   row.querySelector('.oleft').onclick  = () => nudge(note, -1);
@@ -1370,9 +1493,22 @@ $('#amp').addEventListener('input', e => { state.amp = +e.target.value; render()
 $('#lh').addEventListener('input',  e => { state.laneH = +e.target.value; render(); });
 
 $('#resetoff').onclick = () => {
-  for (const r of state.rows) if (!r.locked) r.offset = 0;
+  for (const r of state.rows) if (!r.locked){
+    r.offset = 0;
+    if (r.shifts) r.shifts.fill(0);   // cut pieces back in line, cuts kept
+  }
   refreshRails(); render();
 };
+
+function setCutMode(on){
+  state.cutMode = on;
+  state.cutHover = null;
+  $('#cutbtn').classList.toggle('on', on);
+  document.body.classList.toggle('cutting', on);
+  render();
+}
+$('#cutbtn').onclick = () => setCutMode(!state.cutMode);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.cutMode) setCutMode(false); });
 
 /* back to the empty page, keeping only the display settings */
 const HINT = $('#hint').innerHTML;   // the load errors may have replaced it
@@ -1406,12 +1542,30 @@ $('#addnote').onclick = () => insertTextRow('');
 
 /** Pasted text as a new row: whitespace dropped, and a FASTA header,
  *  if any, becomes the row name. */
-function pasteAsRow(raw){
+function parsePasted(raw){
   const lines = String(raw || '').split(/\r?\n/);
   const head = lines.find(l => l.startsWith('>'));
-  const text = lines.filter(l => !l.startsWith('>')).join('').replace(/\s+/g, '');
+  return {
+    text: lines.filter(l => !l.startsWith('>')).join('').replace(/\s+/g, ''),
+    name: head ? head.slice(1).trim() : undefined
+  };
+}
+
+function pasteAsRow(raw){
+  const {text, name} = parsePasted(raw);
+  if (text) insertTextRow(text, name);
+}
+
+/** Pasted text written into a row from the clicked cell onwards. */
+function pasteIntoRow(note, raw){
+  const {text} = parsePasted(raw);
   if (!text) return;
-  insertTextRow(text, head ? head.slice(1).trim() : undefined);
+  if (state.caret.id !== note.id) state.caret = {id: note.id, col: 0};
+  let col = state.caret.col;
+  for (const c of text){ col = noteSet(note, col, c); col++; }
+  state.caret.col = col;
+  ensureCaretVisible(note);
+  render();
 }
 
 $('#pastenote').onclick = async () => {
@@ -1419,13 +1573,17 @@ $('#pastenote').onclick = async () => {
   catch (_){ alert('Your browser blocked reading the clipboard — press Ctrl+V on the page instead.'); }
 };
 
-// Ctrl+V anywhere outside a field or a text row pastes into a new row.
+// Ctrl+V goes into the text row that has the cursor, otherwise into a
+// new row. The browser may target the body rather than the focused
+// canvas, so the focus decides, not the event target.
 document.addEventListener('paste', e => {
   const t = e.target;
   if (/^(INPUT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable) return;
-  if (t.classList && t.classList.contains('notecanvas')) return;
   e.preventDefault();
-  pasteAsRow((e.clipboardData || window.clipboardData).getData('text'));
+  const raw = (e.clipboardData || window.clipboardData).getData('text');
+  const f = document.activeElement;
+  const note = f && f.classList.contains('notecanvas') && texts().find(n => n.canvas === f);
+  note ? pasteIntoRow(note, raw) : pasteAsRow(raw);
 });
 
 $('#theme').onclick = () => {
