@@ -230,6 +230,7 @@ input[type=range]{width:88px;accent-color:var(--accent)}
 
     <div class="sep"></div>
     <button class="btn" id="addnote" title="Insert a text row below the active row">+ text row</button>
+    <button class="btn" id="pastenote" title="Paste a sequence from the clipboard as a new text row (or press Ctrl+V on the page)">Paste as text row</button>
 
     <div class="spacer"></div>
     <button class="btn" id="resetoff">Reset offsets</button>
@@ -269,7 +270,7 @@ input[type=range]{width:88px;accent-color:var(--accent)}
   <footer class="status">
     <span>Cursor <b id="pos">—</b></span>
     <span id="hint">
-      Drag a row to slide it · drag its rail to reorder · on a text row, click a cell then type ·
+      Drag a row to slide it · drag its rail to reorder · on a text row, click a cell then type · <kbd>Ctrl</kbd>+<kbd>V</kbd> on the page pastes a new text row ·
       <kbd>wheel</kbd> scrolls · <kbd>Ctrl</kbd>+<kbd>wheel</kbd> zooms ·
       <kbd>←</kbd><kbd>→</kbd> shift the active row · <kbd>Alt</kbd>+<kbd>↑</kbd><kbd>↓</kbd> move it ·
       <kbd>double-click</kbd> resets
@@ -1391,15 +1392,41 @@ $('#clear').onclick = () => {
   render();
 };
 
-$('#addnote').onclick = () => {
+function insertTextRow(text, label){
   // inserted right below the active row, so you can annotate between two traces
-  const n = addTextRow('', Math.round(view.left + viewportBases() * 0.1), state.activeId);
-  state.caret = {id: n.id, col: 0};
+  const n = addTextRow(text, Math.round(view.left + viewportBases() * 0.1), state.activeId, label);
+  state.caret = {id: n.id, col: text ? text.length : 0};
   setActive(n.id);
   n.canvas.focus();
   n.el.scrollIntoView({block: 'nearest'});
   syncScrollbar();
+}
+
+$('#addnote').onclick = () => insertTextRow('');
+
+/** Pasted text as a new row: whitespace dropped, and a FASTA header,
+ *  if any, becomes the row name. */
+function pasteAsRow(raw){
+  const lines = String(raw || '').split(/\r?\n/);
+  const head = lines.find(l => l.startsWith('>'));
+  const text = lines.filter(l => !l.startsWith('>')).join('').replace(/\s+/g, '');
+  if (!text) return;
+  insertTextRow(text, head ? head.slice(1).trim() : undefined);
+}
+
+$('#pastenote').onclick = async () => {
+  try { pasteAsRow(await navigator.clipboard.readText()); }
+  catch (_){ alert('Your browser blocked reading the clipboard — press Ctrl+V on the page instead.'); }
 };
+
+// Ctrl+V anywhere outside a field or a text row pastes into a new row.
+document.addEventListener('paste', e => {
+  const t = e.target;
+  if (/^(INPUT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable) return;
+  if (t.classList && t.classList.contains('notecanvas')) return;
+  e.preventDefault();
+  pasteAsRow((e.clipboardData || window.clipboardData).getData('text'));
+});
 
 $('#theme').onclick = () => {
   const cur = document.documentElement.getAttribute('data-theme');
