@@ -269,7 +269,7 @@ input[type=range]{width:88px;accent-color:var(--accent)}
   <footer class="status">
     <span>Cursor <b id="pos">—</b></span>
     <span id="hint">
-      Drag a row to slide it · drag its rail to reorder · on a text row, click a cell then type ·
+      Drag a row to slide it · drag its rail to reorder · on a text row, click a cell then type, <kbd>Shift</kbd>+click or <kbd>Shift</kbd>+drag selects, <kbd>Ctrl</kbd>+<kbd>C</kbd> copies (the whole row if nothing is selected) ·
       <kbd>wheel</kbd> scrolls · <kbd>Ctrl</kbd>+<kbd>wheel</kbd> zooms ·
       <kbd>←</kbd><kbd>→</kbd> shift the active row · <kbd>Alt</kbd>+<kbd>↑</kbd><kbd>↓</kbd> move it ·
       <kbd>double-click</kbd> resets
@@ -986,20 +986,29 @@ function addTextRow(text, offset, afterId, label){
 
   // Same gesture as on a trace: dragging slides the row, while a click
   // without movement drops the cursor on the targeted cell.
+  // With Shift held, a click or a drag selects cells instead.
   let cdrag = null;
+  const colAt = e => Math.round(xToBase(e.clientX - note.canvas.getBoundingClientRect().left) - note.offset);
   note.canvas.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
     setActive(note.id);
-    const r = note.canvas.getBoundingClientRect();
-    cdrag = {
-      x: e.clientX, off0: note.offset, moved: false,
-      col: Math.round(xToBase(e.clientX - r.left) - note.offset)
-    };
+    cdrag = {x: e.clientX, off0: note.offset, moved: false, col: colAt(e), select: e.shiftKey};
+    if (cdrag.select){
+      const anchor = state.caret.id === note.id ? (state.caret.anchor ?? state.caret.col) : cdrag.col;
+      state.caret = {id: note.id, col: cdrag.col, anchor};
+      note.canvas.focus();
+      drawTextRows();
+    }
     try { note.canvas.setPointerCapture(e.pointerId); } catch (_){}
   });
 
   note.canvas.addEventListener('pointermove', e => {
     if (!cdrag) return;
+    if (cdrag.select){
+      const col = colAt(e);
+      if (col !== state.caret.col){ state.caret.col = col; drawTextRows(); }
+      return;
+    }
     if (!cdrag.moved && Math.abs(e.clientX - cdrag.x) < 4) return;
     cdrag.moved = true;
     const d = (e.clientX - cdrag.x) / view.pxpb;
@@ -1009,7 +1018,7 @@ function addTextRow(text, offset, afterId, label){
 
   const cend = e => {
     if (!cdrag) return;
-    if (!cdrag.moved){
+    if (!cdrag.moved && !cdrag.select){
       state.caret = {id: note.id, col: cdrag.col};
       note.canvas.focus();
       drawTextRows();
@@ -1031,9 +1040,10 @@ function addTextRow(text, offset, afterId, label){
     const txt = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, '');
     if (!txt) return;
     if (state.caret.id !== note.id) state.caret = {id: note.id, col: 0};
-    let col = state.caret.col;
+    const sel = selRange(note);
+    let col = sel ? sel[0] : state.caret.col;
     for (const c of txt){ col = noteSet(note, col, c); col++; }
-    state.caret.col = col;
+    state.caret = {id: note.id, col};
     ensureCaretVisible(note);
     render();
   });
@@ -1050,11 +1060,75 @@ function addTextRow(text, offset, afterId, label){
 }
 addTextRow.n = 0;
 
+/** The selected cells of a text row as [first, last], or null. */
+function selRange(note){
+  const c = state.caret;
+  if (c.id !== note.id || c.anchor == null || c.anchor === c.col) return null;
+  return [Math.min(c.anchor, c.col), Math.max(c.anchor, c.col)];
+}
+
+/** Blank the selected cells; returns the first one. */
+function clearSel(note, sel){
+  for (let i = sel[0]; i <= sel[1]; i++) if (i >= 0 && i < note.text.length) noteSet(note, i, ' ');
+  return sel[0];
+}
+
+/** Text that Ctrl+C takes: the selection, or the whole row when nothing is selected. */
+function noteCopyText(note){
+  const sel = selRange(note);
+  const s = sel ? note.text.slice(Math.max(0, sel[0]), sel[1] + 1) : note.text;
+  return s.trim();
+}
+
+function copyToClipboard(s, back){
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = s;
+    ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (_){}
+    ta.remove();
+    if (back) back.focus();
+  };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(s).catch(fallback);
+  else fallback();
+  $('#pos').textContent = 'copied ' + s.replace(/\s/g, '').length + ' characters';
+}
+
 function onNoteKey(note, e){
-  if (e.ctrlKey || e.metaKey || e.altKey) return;   // let Ctrl+V, Ctrl+R… through
   if (state.caret.id !== note.id) state.caret = {id: note.id, col: 0};
-  let col = state.caret.col;
   const k = e.key;
+
+  if ((e.ctrlKey || e.metaKey) && !e.altKey){
+    const kl = k.toLowerCase();
+    if (kl === 'a'){
+      // select from the first to the last written cell
+      const first = note.text.search(/\S/);
+      if (first < 0) return;
+      state.caret = {id: note.id, anchor: first, col: note.text.replace(/\s+$/, '').length - 1};
+    }
+    else if (kl === 'c' || kl === 'x'){
+      const s = noteCopyText(note);
+      if (!s) return;
+      copyToClipboard(s, note.canvas);
+      if (kl === 'x'){
+        const sel = selRange(note) || [0, note.text.length - 1];
+        state.caret = {id: note.id, col: clearSel(note, sel)};
+      }
+    }
+    else return;                                    // let Ctrl+V, Ctrl+R… through
+    e.preventDefault(); e.stopPropagation();
+    render();
+    return;
+  }
+  if (e.altKey) return;
+
+  // Shift + a movement key grows the selection; any other key drops it.
+  const moving = /^(ArrowLeft|ArrowRight|Home|End)$/.test(k);
+  const sel = selRange(note);
+  const anchor = moving && e.shiftKey ? (state.caret.anchor ?? state.caret.col) : undefined;
+  let col = state.caret.col;
 
   if (k === 'ArrowLeft')       col--;
   else if (k === 'ArrowRight') col++;
@@ -1071,15 +1145,20 @@ function onNoteKey(note, e){
     drawTextRows();
     return;
   }
+  else if (sel && (k === 'Backspace' || k === 'Delete')) col = clearSel(note, sel);
   else if (k === 'Backspace')  col = noteSet(note, col - 1, ' ');
   else if (k === 'Delete')     noteSet(note, col, ' ');
   else if (k === 'Home')       col = 0;
   else if (k === 'End')        col = note.text.replace(/\s+$/, '').length;
-  else if (k.length === 1){ col = noteSet(note, col, k); col++; }
+  else if (k.length === 1){
+    if (sel) col = clearSel(note, sel);
+    col = noteSet(note, col, k); col++;
+  }
+  else if (k === 'Escape' && sel){}                 // just drops the selection
   else return;                                      // Tab, F5, Esc... pass through
 
   e.preventDefault(); e.stopPropagation();
-  state.caret = {id: note.id, col};
+  state.caret = {id: note.id, col, anchor};
   ensureCaretVisible(note);
   render();
 }
@@ -1118,6 +1197,14 @@ function drawTextRow(note){
       ctx.moveTo(x, 2); ctx.lineTo(x, h - 2);
     }
     ctx.stroke();
+  }
+
+  // ---- the selected cells ----
+  const sel = selRange(note);
+  if (sel){
+    const x0 = baseToX(sel[0] + note.offset) - cw / 2;
+    ctx.fillStyle = COL.match;
+    ctx.fillRect(x0, 1, (sel[1] - sel[0] + 1) * cw, h - 2);
   }
 
   // ---- the cursor cell ----
