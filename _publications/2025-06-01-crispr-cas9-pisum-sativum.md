@@ -5,7 +5,7 @@ category: manuscripts
 permalink: /publication/2025-crispr-cas9-pisum-sativum
 excerpt: 'We developed an embryonic axis transformation and gene-editing protocol for pea (<i>Pisum sativum</i>), with very high editing efficiency. The most important parts of this protocol are the grafting (quick, with no root regeneration in vitro) and the use of DsRed (better than antibiotics for unevenly transformed plants).'
 date: 2025-06-01
-order: 1
+order: 2
 venue: 'Plant Biotechnology Journal'
 paperurl: 'https://doi.org/10.1111/pbi.70091'
 citation: '<b>Soulard, C.</b>, Monfort, M., Pillot, J.-P., Gery, C., Chauvin, L., Morlière, S., Lesné, A., Sugio, A., Pilet-Nayel, M.-L., Rameau, C., Nogué, F., &amp; de Saint Germain, A. (2025). Efficient and heritable gene editing through CRISPR-Cas9 in <i>Pisum sativum</i>. <i>Plant Biotechnology Journal</i>, 23(8), 3398–3400. https://doi.org/10.1111/pbi.70091'
