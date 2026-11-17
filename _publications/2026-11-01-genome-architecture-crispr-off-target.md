@@ -3,7 +3,7 @@ title: "Genome architecture shapes clustered regularly interspaced short palindr
 collection: publications
 category: manuscripts
 permalink: /publication/2026-genome-architecture-crispr-off-target
-excerpt: 'How the architecture of plant genomes influences the potential for CRISPR-Cas off-target editing.'
+excerpt: 'An <i>in silico</i> study of predicted off-targets across a wide range of species, linking plant genome architecture to the number of predicted off-targets.'
 date: 2026-11-01
 order: 1
 venue: 'Trends in Plant Science'
