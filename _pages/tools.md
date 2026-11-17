@@ -2,7 +2,7 @@
 layout: archive
 title: "Tools"
 permalink: /tools/
-author_profile: true
+author_profile: false
 ---
 
 Tools I built for my own research and share in case they are useful to others. They run directly in your browser, with nothing to install.
